@@ -10,6 +10,7 @@
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>나의 루틴</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   body {
@@ -103,6 +104,26 @@
   .add-form input:focus { border-color:#FFB25C; }
   .add-btn { margin-top:10px; width:100%; padding:12px; background:linear-gradient(90deg,#FFB25C,#FF8A5C); color:#fff; font-weight:800; font-size:15px; border:none; border-radius:12px; cursor:pointer; font-family:inherit; }
   .hint { font-size:12px; color:#B8A28C; text-align:center; padding:10px 24px 20px; }
+
+  /* to-do */
+  .section-title { font-size:14px; font-weight:800; padding:14px 24px 6px; color:#8A6F58; }
+  .gcal-box { margin:0 20px; background:#FFFFFF; border-radius:16px; padding:12px 14px; box-shadow:0 2px 6px rgba(160,120,80,.07); }
+  .gcal-btn { width:100%; padding:11px; background:#FFF0E0; border:1.5px dashed #FFB25C; border-radius:12px; font-size:14px; font-weight:700; color:#D97742; cursor:pointer; font-family:inherit; }
+  .gcal-note { font-size:12px; color:#B8A28C; text-align:center; padding:6px 4px 0; }
+  .gevent { display:flex; align-items:center; gap:10px; padding:9px 4px; border-bottom:1px solid #FFF3E6; font-size:14px; }
+  .gevent:last-child { border-bottom:none; }
+  .gevent .gtime { color:#FF8A5C; font-weight:800; font-size:12px; min-width:74px; }
+  .todo-add { display:flex; gap:8px; margin:6px 20px 4px; }
+  .todo-add input { flex:1; padding:12px 14px; border:1.5px solid #EEDCC8; border-radius:14px; font-size:15px; font-family:inherit; background:#FFFBF6; color:#4A3B32; outline:none; }
+  .todo-add input:focus { border-color:#FFB25C; }
+  .todo-add button { width:48px; border:none; border-radius:14px; background:linear-gradient(90deg,#FFB25C,#FF8A5C); color:#fff; font-size:22px; font-weight:800; cursor:pointer; }
+  .todo-item { display:flex; align-items:center; gap:10px; background:#FFFFFF; border-radius:14px; padding:11px 12px; margin-bottom:8px; box-shadow:0 1px 4px rgba(160,120,80,.07); }
+  .todo-item .chk { width:26px; height:26px; border-radius:50%; border:2px solid #E8D5C0; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:15px; cursor:pointer; background:none; }
+  .todo-item.done .chk { border-color:#FFB25C; background:#FFF0E0; }
+  .todo-item .txt { flex:1; font-size:15px; font-weight:600; cursor:pointer; }
+  .todo-item.done .txt { color:#B89B82; text-decoration:line-through; text-decoration-color:#FFB25C; }
+  .todo-item .old { font-size:11px; color:#C9B49E; }
+  .todo-item button.del { background:#FFE3E0; border:none; border-radius:8px; width:30px; height:30px; font-size:13px; cursor:pointer; color:#4A3B32; flex-shrink:0; }
 </style>
 </head>
 <body>
@@ -119,6 +140,29 @@
     <div class="cheer" id="cheer">🎉 오늘 루틴 전부 완료! 최고예요! 🎉</div>
   </div>
   <div class="list" id="task-list"></div>
+</div>
+
+<!-- To-do -->
+<div class="page" id="page-todo">
+  <header>
+    <h1>To-do 📝</h1>
+    <div class="date" id="todo-date"></div>
+  </header>
+
+  <div class="section-title">📆 오늘의 구글캘린더 일정</div>
+  <div class="gcal-box" id="gcal-box">
+    <button class="gcal-btn" id="gcal-btn" onclick="connectGcal()">구글캘린더 연결하기</button>
+    <div class="gcal-note" id="gcal-note"></div>
+    <div id="gcal-list"></div>
+  </div>
+
+  <div class="section-title">✅ 나의 할일</div>
+  <div class="todo-add">
+    <input id="todo-input" type="text" placeholder="할일 입력" maxlength="60">
+    <button onclick="addTodo()">+</button>
+  </div>
+  <div class="list" id="todo-list"></div>
+  <div class="hint">완료 못한 할일은 자동으로 다음날로 넘어가요.</div>
 </div>
 
 <!-- 기록 -->
@@ -147,7 +191,8 @@
 </div>
 
 <nav>
-  <button class="active" id="tab-today" onclick="showPage('today')"><span class="nicon">☀️</span>오늘</button>
+  <button class="active" id="tab-today" onclick="showPage('today')"><span class="nicon">☀️</span>Routine</button>
+  <button id="tab-todo" onclick="showPage('todo')"><span class="nicon">📝</span>To-do</button>
   <button id="tab-history" onclick="showPage('history')"><span class="nicon">📅</span>기록</button>
   <button id="tab-edit" onclick="showPage('edit')"><span class="nicon">✏️</span>편집</button>
 </nav>
@@ -338,13 +383,173 @@ function addTask(){
   renderEdit();
 }
 
+// ---------- To-do ----------
+function loadTodos(){
+  var raw = sGet("routine_todos");
+  if(raw){ try { return JSON.parse(raw); } catch(e){} }
+  return [];
+}
+function saveTodos(){ sSet("routine_todos", JSON.stringify(todos)); }
+var todos = loadTodos();
+
+function purgeOldDone(){
+  // 지난날 완료한 투두는 목록에서 정리 (미완료는 이월되어 계속 표시)
+  var t = todayStr();
+  var before = todos.length;
+  todos = todos.filter(function(td){ return !td.done || td.doneDate === t; });
+  if(todos.length !== before) saveTodos();
+}
+function renderTodo(){
+  purgeOldDone();
+  var d = new Date();
+  var dow = ["일","월","화","수","목","금","토"];
+  document.getElementById("todo-date").textContent =
+    d.getFullYear()+"년 "+(d.getMonth()+1)+"월 "+d.getDate()+"일 ("+dow[d.getDay()]+")";
+  var list = document.getElementById("todo-list");
+  list.innerHTML = "";
+  if(todos.length===0){
+    list.innerHTML = '<div class="hint" style="padding-top:4px">아직 할일이 없어요. 위에 입력해보세요!</div>';
+    return;
+  }
+  var t = todayStr();
+  todos.forEach(function(td){
+    var el = document.createElement("div");
+    el.className = "todo-item"+(td.done?" done":"");
+    var chk = document.createElement("button");
+    chk.className = "chk";
+    chk.innerHTML = td.done ? '<span class="stamp">✅</span>' : '';
+    chk.onclick = function(){
+      td.done = !td.done;
+      td.doneDate = td.done ? t : null;
+      if(td.done && navigator.vibrate) navigator.vibrate(30);
+      saveTodos(); renderTodo();
+    };
+    var txt = document.createElement("span");
+    txt.className = "txt";
+    txt.textContent = td.text;
+    if(td.created && td.created !== t && !td.done){
+      var old = document.createElement("span");
+      old.className = "old";
+      old.textContent = " ("+td.created.slice(5).replace("-","/")+"부터)";
+      txt.appendChild(old);
+    }
+    txt.onclick = function(){
+      var v = prompt("할일 수정", td.text);
+      if(v!==null && v.trim()){ td.text = v.trim(); saveTodos(); renderTodo(); }
+    };
+    var del = document.createElement("button");
+    del.className = "del";
+    del.textContent = "✕";
+    del.onclick = function(){
+      if(confirm('"'+td.text+'" 을(를) 삭제할까요?')){
+        todos = todos.filter(function(x){ return x !== td; });
+        saveTodos(); renderTodo();
+      }
+    };
+    el.appendChild(chk); el.appendChild(txt); el.appendChild(del);
+    list.appendChild(el);
+  });
+}
+function addTodo(){
+  var input = document.getElementById("todo-input");
+  var text = input.value.trim();
+  if(!text){ input.focus(); return; }
+  todos.push({ id: Date.now(), text: text, done: false, doneDate: null, created: todayStr() });
+  saveTodos();
+  input.value = "";
+  renderTodo();
+}
+document.addEventListener("DOMContentLoaded", function(){
+  var inp = document.getElementById("todo-input");
+  if(inp) inp.addEventListener("keydown", function(e){ if(e.key==="Enter") addTodo(); });
+});
+
+// ---------- 구글캘린더 ----------
+var GOOGLE_CLIENT_ID = "843415680672-nutva8fu3letg1pdu1j75d9agakm779v.apps.googleusercontent.com";
+var gcalToken = null, gcalTokenClient = null;
+
+function gcalReady(){ return GOOGLE_CLIENT_ID.indexOf("여기에") === -1 && window.google && google.accounts; }
+
+function connectGcal(){
+  var note = document.getElementById("gcal-note");
+  if(!gcalReady()){
+    note.textContent = GOOGLE_CLIENT_ID.indexOf("여기에") === 0
+      ? "아직 연동 설정이 안 됐어요 (클라이언트 ID 필요)"
+      : "구글 로그인 모듈을 불러오는 중이에요. 잠시 후 다시 눌러주세요.";
+    return;
+  }
+  if(!gcalTokenClient){
+    gcalTokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: "https://www.googleapis.com/auth/calendar.readonly",
+      callback: function(resp){
+        if(resp && resp.access_token){
+          gcalToken = resp.access_token;
+          sSet("gcal_connected","1");
+          fetchGcalEvents();
+        }
+      }
+    });
+  }
+  gcalTokenClient.requestAccessToken({ prompt: sGet("gcal_connected") ? "" : "consent" });
+}
+
+function fetchGcalEvents(){
+  var note = document.getElementById("gcal-note");
+  var list = document.getElementById("gcal-list");
+  note.textContent = "일정을 불러오는 중...";
+  var d = new Date();
+  var start = new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString();
+  var end = new Date(d.getFullYear(), d.getMonth(), d.getDate()+1).toISOString();
+  var url = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
+    + "?timeMin=" + encodeURIComponent(start)
+    + "&timeMax=" + encodeURIComponent(end)
+    + "&singleEvents=true&orderBy=startTime&maxResults=20";
+  fetch(url, { headers: { "Authorization": "Bearer " + gcalToken } })
+    .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function(data){
+      list.innerHTML = "";
+      var items = data.items || [];
+      if(items.length === 0){
+        note.textContent = "오늘 일정이 없어요 🎈";
+      } else {
+        note.textContent = "";
+        items.forEach(function(ev){
+          var row = document.createElement("div");
+          row.className = "gevent";
+          var time = "종일";
+          if(ev.start && ev.start.dateTime){
+            var s = new Date(ev.start.dateTime);
+            time = String(s.getHours()).padStart(2,"0")+":"+String(s.getMinutes()).padStart(2,"0");
+            if(ev.end && ev.end.dateTime){
+              var e2 = new Date(ev.end.dateTime);
+              time += "~"+String(e2.getHours()).padStart(2,"0")+":"+String(e2.getMinutes()).padStart(2,"0");
+            }
+          }
+          row.innerHTML = '<span class="gtime">'+time+'</span><span>'+esc(ev.summary || "(제목 없음)")+'</span>';
+          list.appendChild(row);
+        });
+      }
+      document.getElementById("gcal-btn").textContent = "🔄 일정 새로고침";
+    })
+    .catch(function(){
+      note.textContent = "일정을 불러오지 못했어요. 다시 연결해주세요.";
+      gcalToken = null;
+    });
+}
+
 // ---------- 탭 ----------
 function showPage(p){
-  ["today","history","edit"].forEach(function(n){
+  ["today","todo","history","edit"].forEach(function(n){
     document.getElementById("page-"+n).classList.toggle("show", n===p);
     document.getElementById("tab-"+n).classList.toggle("active", n===p);
   });
   if(p==="today") renderToday();
+  if(p==="todo"){
+    renderTodo();
+    // 이전에 연결한 적 있으면 자동으로 일정 로드 시도
+    if(!gcalToken && sGet("gcal_connected") && gcalReady()) connectGcal();
+  }
   if(p==="history"){ initCalIfNeeded(); renderCal(); }
   if(p==="edit"){ renderEdit(); renderEmojiRow(); }
 }
@@ -354,7 +559,7 @@ function initCalIfNeeded(){ if(!calInit){ initCal(); calInit = true; } }
 // 자정 넘어가면 자동 갱신
 var lastDay = todayStr();
 setInterval(function(){
-  if(todayStr()!==lastDay){ lastDay = todayStr(); renderToday(); }
+  if(todayStr()!==lastDay){ lastDay = todayStr(); renderToday(); renderTodo(); }
 }, 30000);
 
 renderToday();
