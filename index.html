@@ -114,7 +114,7 @@
   .gevent:last-child { border-bottom:none; }
   .gevent .gtime { color:#FF8A5C; font-weight:800; font-size:12px; min-width:74px; }
   .todo-add { display:flex; gap:8px; margin:6px 20px 4px; }
-  .todo-add input { flex:1; padding:12px 14px; border:1.5px solid #EEDCC8; border-radius:14px; font-size:15px; font-family:inherit; background:#FFFBF6; color:#4A3B32; outline:none; }
+  .todo-add input { flex:1; min-width:0; padding:12px 14px; border:1.5px solid #EEDCC8; border-radius:14px; font-size:15px; font-family:inherit; background:#FFFBF6; color:#4A3B32; outline:none; }
   .todo-add input:focus { border-color:#FFB25C; }
   .todo-add button { width:48px; border:none; border-radius:14px; background:linear-gradient(90deg,#FFB25C,#FF8A5C); color:#fff; font-size:22px; font-weight:800; cursor:pointer; }
   .todo-item { display:flex; align-items:center; gap:10px; background:#FFFFFF; border-radius:14px; padding:11px 12px; margin-bottom:8px; box-shadow:0 1px 4px rgba(160,120,80,.07); }
@@ -127,9 +127,18 @@
 
   /* 길게 눌러 순서 이동 */
   .task, .todo-item { user-select:none; -webkit-user-select:none; }
-  .dragging { opacity:.85; transform:scale(1.03); box-shadow:0 8px 20px rgba(160,120,80,.3) !important; position:relative; z-index:5; }
+  .dragging { opacity:.9; z-index:5; position:relative; }
+  .dragging .task, .todo-item.dragging { transform:scale(1.03); box-shadow:0 8px 20px rgba(160,120,80,.3); }
   .emoji-btn { width:48px; flex-shrink:0; border:1.5px solid #EEDCC8; border-radius:14px; background:#FFFBF6; font-size:20px; cursor:pointer; }
   #routine-emoji-row { margin:8px 20px 0; }
+
+  /* 스와이프 삭제 + 아이콘 완료 */
+  .task-wrap { position:relative; margin-bottom:10px; }
+  .task-wrap .task { margin-bottom:0; position:relative; z-index:1; transition:transform .25s ease; }
+  .swipe-del { position:absolute; top:0; right:0; bottom:0; width:76px; border:none; border-radius:16px; background:#FF6B5C; color:#fff; font-size:14px; font-weight:800; cursor:pointer; font-family:inherit; }
+  .icon-btn { width:46px; height:46px; border-radius:50%; border:2px dashed #E8D5C0; background:none; display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0; position:relative; cursor:pointer; padding:0; }
+  .icon-btn.on { border:2px solid #FFB25C; background:#FFF8EF; }
+  .icon-btn .badge { position:absolute; right:-5px; bottom:-5px; width:20px; height:20px; border-radius:50%; background:#FF8A5C; color:#fff; font-size:12px; display:flex; align-items:center; justify-content:center; font-weight:800; }
 </style>
 </head>
 <body>
@@ -152,7 +161,7 @@
   </div>
   <div class="emoji-row" id="routine-emoji-row" style="display:none"></div>
   <div class="list" id="task-list"></div>
-  <div class="hint">이름을 탭하면 수정, 동그라미를 탭하면 완료, 꾹 누르면 순서 이동이에요.</div>
+  <div class="hint">아이콘 탭=완료 · 이름 탭=수정 · 꾹 누르면 순서 이동 · 왼쪽으로 밀면 삭제</div>
 </div>
 
 <!-- To-do -->
@@ -190,24 +199,10 @@
   <div class="day-detail" id="day-detail" style="display:none"></div>
 </div>
 
-<!-- 편집 -->
-<div class="page" id="page-edit">
-  <header><h1>할일 편집 ✏️</h1></header>
-  <div class="edit-list" id="edit-list"></div>
-  <div class="add-form">
-    <h3>새 할일 추가</h3>
-    <div class="emoji-row" id="emoji-row"></div>
-    <input id="new-name" type="text" placeholder="할일 이름" maxlength="30">
-    <button class="add-btn" onclick="addTask()">+ 추가하기</button>
-  </div>
-  <div class="hint">순서 변경은 ↑↓, 삭제는 ✕ 버튼을 눌러주세요. 삭제해도 지난 기록은 남아있어요.</div>
-</div>
-
 <nav>
   <button class="active" id="tab-today" onclick="showPage('today')"><span class="nicon">☀️</span>Routine</button>
   <button id="tab-todo" onclick="showPage('todo')"><span class="nicon">📝</span>To-do</button>
   <button id="tab-history" onclick="showPage('history')"><span class="nicon">📅</span>기록</button>
-  <button id="tab-edit" onclick="showPage('edit')"><span class="nicon">✏️</span>편집</button>
 </nav>
 
 <script>
@@ -270,11 +265,24 @@ function renderToday(){
   tasks.forEach(function(t){
     var isDone = !!done[t.id];
     if(isDone) doneCount++;
+    var wrap = document.createElement("div");
+    wrap.className = "task-wrap";
+    wrap.dataset.id = t.id;
+    var delBtn = document.createElement("button");
+    delBtn.className = "swipe-del";
+    delBtn.textContent = "삭제";
+    delBtn.onclick = function(){
+      if(confirm('"'+t.name+'" 루틴을 삭제할까요?')){
+        tasks = tasks.filter(function(x){ return x.id !== t.id; });
+        saveTasks(); openSwipe = null; renderToday();
+      }
+    };
     var el = document.createElement("div");
     el.className = "task"+(isDone?" done":"");
-    el.dataset.id = t.id;
-    var icon = document.createElement("span");
-    icon.className = "icon"; icon.textContent = t.emoji;
+    var iconBtn = document.createElement("button");
+    iconBtn.className = "icon-btn"+(isDone?" on":"");
+    iconBtn.innerHTML = '<span>'+t.emoji+'</span>'+(isDone?'<span class="badge stamp">✔</span>':'');
+    iconBtn.onclick = function(){ if(!justDragged) toggle(t.id); };
     var name = document.createElement("span");
     name.className = "name"; name.textContent = t.name;
     name.onclick = function(){
@@ -282,13 +290,10 @@ function renderToday(){
       var v = prompt("루틴 이름 수정", t.name);
       if(v!==null && v.trim()){ t.name = v.trim(); saveTasks(); renderToday(); }
     };
-    var slot = document.createElement("span");
-    slot.className = "stamp-slot";
-    if(isDone) slot.innerHTML = '<span class="stamp">'+t.emoji+'</span>';
-    slot.onclick = function(){ if(!justDragged) toggle(t.id); };
-    el.appendChild(icon); el.appendChild(name); el.appendChild(slot);
-    attachLongPress(el, listEl, tasks, saveTasks, renderToday);
-    listEl.appendChild(el);
+    el.appendChild(iconBtn); el.appendChild(name);
+    wrap.appendChild(delBtn); wrap.appendChild(el);
+    attachGestures(wrap, el, listEl, tasks, saveTasks, renderToday, { swipe:true });
+    listEl.appendChild(wrap);
   });
   var total = tasks.length;
   var pct = total ? Math.round(doneCount/total*100) : 0;
@@ -310,14 +315,27 @@ function toggle(id){
 }
 function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 
-// ---------- 길게 눌러 순서 이동 ----------
-var justDragged = false;
-function attachLongPress(row, listEl, arr, save, render){
-  var timer = null, dragging = false, sX = 0, sY = 0;
+// ---------- 제스처: 길게 눌러 순서 이동 + 왼쪽 스와이프 삭제 ----------
+var justDragged = false, openSwipe = null;
+function closeSwipe(){
+  if(openSwipe){ openSwipe.style.transform = ""; openSwipe = null; }
+}
+function attachGestures(row, inner, listEl, arr, save, render, opts){
+  opts = opts || {};
+  var timer=null, dragging=false, swiping=false, sX=0, sY=0, sT=0, curX=0;
   row.addEventListener("contextmenu", function(e){ e.preventDefault(); });
-  row.addEventListener("touchmove", function(e){ if(dragging) e.preventDefault(); }, { passive:false });
+  // 스크롤 제어: 드래그/스와이프 중이거나, 길게 누르는 중(200ms 경과)에는 화면 스크롤 차단
+  row.addEventListener("touchmove", function(e){
+    if(dragging || swiping || (timer && Date.now()-sT > 200)) e.preventDefault();
+  }, { passive:false });
   row.addEventListener("pointerdown", function(e){
-    sX = e.clientX; sY = e.clientY;
+    sX = e.clientX; sY = e.clientY; sT = Date.now(); curX = 0;
+    if(openSwipe && openSwipe !== inner){
+      closeSwipe();
+    } else if(openSwipe === inner){
+      closeSwipe();
+      justDragged = true; setTimeout(function(){ justDragged = false; }, 300);
+    }
     timer = setTimeout(function(){
       timer = null; dragging = true;
       row.classList.add("dragging");
@@ -326,20 +344,38 @@ function attachLongPress(row, listEl, arr, save, render){
     }, 450);
   });
   row.addEventListener("pointermove", function(e){
-    if(!dragging){
-      if(timer && (Math.abs(e.clientY-sY)>12 || Math.abs(e.clientX-sX)>12)){ clearTimeout(timer); timer = null; }
+    var dx = e.clientX - sX, dy = e.clientY - sY;
+    if(dragging){
+      // 화면 끝에 가까우면 자동 스크롤
+      if(e.clientY < 130) window.scrollBy(0, -10);
+      else if(e.clientY > window.innerHeight - 130) window.scrollBy(0, 10);
+      var target = null;
+      [].slice.call(listEl.children).forEach(function(sib){
+        if(sib === row || !sib.dataset.id) return;
+        var r = sib.getBoundingClientRect();
+        if(e.clientY >= r.top && e.clientY <= r.bottom) target = sib;
+      });
+      if(target){
+        var tr = target.getBoundingClientRect();
+        if(e.clientY < tr.top + tr.height/2) listEl.insertBefore(row, target);
+        else listEl.insertBefore(row, target.nextSibling);
+      }
       return;
     }
-    var target = null;
-    [].slice.call(listEl.children).forEach(function(sib){
-      if(sib === row || !sib.dataset.id) return;
-      var r = sib.getBoundingClientRect();
-      if(e.clientY >= r.top && e.clientY <= r.bottom) target = sib;
-    });
-    if(target){
-      var tr = target.getBoundingClientRect();
-      if(e.clientY < tr.top + tr.height/2) listEl.insertBefore(row, target);
-      else listEl.insertBefore(row, target.nextSibling);
+    if(swiping){
+      curX = Math.max(-80, Math.min(0, dx));
+      inner.style.transform = "translateX("+curX+"px)";
+      return;
+    }
+    if(timer){
+      if(Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)){
+        clearTimeout(timer); timer = null; // 세로 스크롤 의도
+      } else if(opts.swipe && dx < -12 && Math.abs(dx) > Math.abs(dy)){
+        clearTimeout(timer); timer = null; swiping = true; // 왼쪽 스와이프 시작
+        try { row.setPointerCapture(e.pointerId); } catch(err){}
+      } else if(dx > 12){
+        clearTimeout(timer); timer = null;
+      }
     }
   });
   function finish(){
@@ -353,6 +389,13 @@ function attachLongPress(row, listEl, arr, save, render){
       justDragged = true;
       setTimeout(function(){ justDragged = false; }, 300);
       render();
+    }
+    if(swiping){
+      swiping = false;
+      if(curX < -40){ inner.style.transform = "translateX(-80px)"; openSwipe = inner; }
+      else { inner.style.transform = ""; }
+      justDragged = true;
+      setTimeout(function(){ justDragged = false; }, 300);
     }
   }
   row.addEventListener("pointerup", finish);
@@ -455,52 +498,6 @@ function renderDayDetail(key){
   box.innerHTML = html;
 }
 
-// ---------- 편집 ----------
-var selEmoji = EMOJIS[0];
-function renderEmojiRow(){
-  var row = document.getElementById("emoji-row");
-  row.innerHTML = "";
-  EMOJIS.forEach(function(em){
-    var b = document.createElement("button");
-    b.textContent = em;
-    b.className = (em===selEmoji)?"sel":"";
-    b.onclick = function(){ selEmoji = em; renderEmojiRow(); };
-    row.appendChild(b);
-  });
-}
-function renderEdit(){
-  var list = document.getElementById("edit-list");
-  list.innerHTML = "";
-  tasks.forEach(function(t, i){
-    var row = document.createElement("div");
-    row.className = "erow";
-    row.innerHTML = '<span class="icon">'+t.emoji+'</span><span class="name">'+esc(t.name)+'</span>';
-    var up = mkBtn("↑", function(){ if(i>0){ tasks.splice(i,1); tasks.splice(i-1,0,t); saveTasks(); renderEdit(); } });
-    var dn = mkBtn("↓", function(){ if(i<tasks.length-1){ tasks.splice(i,1); tasks.splice(i+1,0,t); saveTasks(); renderEdit(); } });
-    var del = mkBtn("✕", function(){
-      if(confirm('"'+t.name+'" 을(를) 삭제할까요?')){ tasks.splice(i,1); saveTasks(); renderEdit(); }
-    });
-    del.className = "del";
-    row.appendChild(up); row.appendChild(dn); row.appendChild(del);
-    list.appendChild(row);
-  });
-}
-function mkBtn(txt, fn){ var b = document.createElement("button"); b.textContent = txt; b.onclick = fn; return b; }
-function addTask(){
-  var input = document.getElementById("new-name");
-  var name = input.value.trim();
-  if(!name){ input.focus(); return; }
-  var maxId = 0;
-  tasks.forEach(function(t){ if(t.id>maxId) maxId = t.id; });
-  Object.keys(log).forEach(function(k){
-    Object.keys(log[k]).forEach(function(id){ if(+id>maxId) maxId = +id; });
-  });
-  tasks.push({id:maxId+1, emoji:selEmoji, name:name});
-  saveTasks();
-  input.value = "";
-  renderEdit();
-}
-
 // ---------- To-do ----------
 function loadTodos(){
   var raw = sGet("routine_todos");
@@ -585,7 +582,7 @@ function renderTodo(){
       }
     };
     el.appendChild(chk); el.appendChild(txt); el.appendChild(del);
-    attachLongPress(el, list, todos, saveTodos, renderTodo);
+    attachGestures(el, el, list, todos, saveTodos, renderTodo, { swipe:false });
     list.appendChild(el);
   });
 }
@@ -681,7 +678,7 @@ function fetchGcalEvents(){
 
 // ---------- 탭 ----------
 function showPage(p){
-  ["today","todo","history","edit"].forEach(function(n){
+  ["today","todo","history"].forEach(function(n){
     document.getElementById("page-"+n).classList.toggle("show", n===p);
     document.getElementById("tab-"+n).classList.toggle("active", n===p);
   });
@@ -692,7 +689,6 @@ function showPage(p){
     if(!gcalToken && sGet("gcal_connected") && gcalReady()) connectGcal();
   }
   if(p==="history"){ initCalIfNeeded(); renderCal(); }
-  if(p==="edit"){ renderEdit(); renderEmojiRow(); }
 }
 var calInit = false;
 function initCalIfNeeded(){ if(!calInit){ initCal(); calInit = true; } }
