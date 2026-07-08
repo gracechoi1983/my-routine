@@ -1,7 +1,12 @@
-const CACHE = "routine-v5";
+const CACHE = "routine-v6";
 const FILES = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png"];
+const SORTABLE_CDN = "https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js";
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)));
+  e.waitUntil(caches.open(CACHE).then(c => {
+    // 정렬 라이브러리도 오프라인용으로 캐시 (실패해도 설치는 계속)
+    c.add(new Request(SORTABLE_CDN, { mode: "no-cors" })).catch(() => {});
+    return c.addAll(FILES);
+  }));
   self.skipWaiting();
 });
 self.addEventListener("activate", e => {

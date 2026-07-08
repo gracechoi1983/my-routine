@@ -11,6 +11,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>나의 루틴</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   body {
@@ -127,8 +128,7 @@
 
   /* 길게 눌러 순서 이동 */
   .task, .todo-item { user-select:none; -webkit-user-select:none; }
-  .dragging { opacity:.9; z-index:5; position:relative; }
-  .dragging .task, .todo-item.dragging { transform:scale(1.03); box-shadow:0 8px 20px rgba(160,120,80,.3); }
+  .sort-ghost { opacity:.4; }
   .emoji-btn { width:48px; flex-shrink:0; border:1.5px solid #EEDCC8; border-radius:14px; background:#FFFBF6; font-size:20px; cursor:pointer; }
   #routine-emoji-row { margin:8px 20px 0; }
 
@@ -292,7 +292,7 @@ function renderToday(){
     };
     el.appendChild(iconBtn); el.appendChild(name);
     wrap.appendChild(delBtn); wrap.appendChild(el);
-    attachGestures(wrap, el, listEl, tasks, saveTasks, renderToday, { swipe:true });
+    attachSwipe(wrap, el);
     listEl.appendChild(wrap);
   });
   var total = tasks.length;
@@ -315,81 +315,39 @@ function toggle(id){
 }
 function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 
-// ---------- 제스처: 길게 눌러 순서 이동 + 왼쪽 스와이프 삭제 ----------
-var justDragged = false, openSwipe = null;
+// ---------- 제스처: 왼쪽 스와이프 삭제 (순서 이동은 SortableJS가 담당) ----------
+var justDragged = false, openSwipe = null, sorting = false;
 function closeSwipe(){
   if(openSwipe){ openSwipe.style.transform = ""; openSwipe = null; }
 }
-function attachGestures(row, inner, listEl, arr, save, render, opts){
-  opts = opts || {};
-  var timer=null, dragging=false, swiping=false, sX=0, sY=0, sT=0, curX=0;
-  row.addEventListener("contextmenu", function(e){ e.preventDefault(); });
-  // 스크롤 제어: 드래그/스와이프 중이거나, 길게 누르는 중(200ms 경과)에는 화면 스크롤 차단
+function attachSwipe(row, inner){
+  var swiping = false, sX = 0, sY = 0, curX = 0;
   row.addEventListener("touchmove", function(e){
-    if(dragging || swiping || (timer && Date.now()-sT > 200)) e.preventDefault();
+    if(swiping) e.preventDefault();
   }, { passive:false });
   row.addEventListener("pointerdown", function(e){
-    sX = e.clientX; sY = e.clientY; sT = Date.now(); curX = 0;
+    sX = e.clientX; sY = e.clientY; curX = 0;
     if(openSwipe && openSwipe !== inner){
       closeSwipe();
     } else if(openSwipe === inner){
       closeSwipe();
       justDragged = true; setTimeout(function(){ justDragged = false; }, 300);
     }
-    timer = setTimeout(function(){
-      timer = null; dragging = true;
-      row.classList.add("dragging");
-      if(navigator.vibrate) navigator.vibrate(40);
-      try { row.setPointerCapture(e.pointerId); } catch(err){}
-    }, 450);
   });
   row.addEventListener("pointermove", function(e){
+    if(sorting) return;
     var dx = e.clientX - sX, dy = e.clientY - sY;
-    if(dragging){
-      // 화면 끝에 가까우면 자동 스크롤
-      if(e.clientY < 130) window.scrollBy(0, -10);
-      else if(e.clientY > window.innerHeight - 130) window.scrollBy(0, 10);
-      var target = null;
-      [].slice.call(listEl.children).forEach(function(sib){
-        if(sib === row || !sib.dataset.id) return;
-        var r = sib.getBoundingClientRect();
-        if(e.clientY >= r.top && e.clientY <= r.bottom) target = sib;
-      });
-      if(target){
-        var tr = target.getBoundingClientRect();
-        if(e.clientY < tr.top + tr.height/2) listEl.insertBefore(row, target);
-        else listEl.insertBefore(row, target.nextSibling);
-      }
-      return;
-    }
     if(swiping){
       curX = Math.max(-80, Math.min(0, dx));
       inner.style.transform = "translateX("+curX+"px)";
       return;
     }
-    if(timer){
-      if(Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)){
-        clearTimeout(timer); timer = null; // 세로 스크롤 의도
-      } else if(opts.swipe && dx < -12 && Math.abs(dx) > Math.abs(dy)){
-        clearTimeout(timer); timer = null; swiping = true; // 왼쪽 스와이프 시작
-        try { row.setPointerCapture(e.pointerId); } catch(err){}
-      } else if(dx > 12){
-        clearTimeout(timer); timer = null;
-      }
+    if(dx < -12 && Math.abs(dx) > Math.abs(dy)){
+      swiping = true;
+      try { row.setPointerCapture(e.pointerId); } catch(err){}
     }
   });
   function finish(){
-    if(timer){ clearTimeout(timer); timer = null; }
-    if(dragging){
-      dragging = false;
-      row.classList.remove("dragging");
-      var order = [].slice.call(listEl.children).map(function(c){ return c.dataset.id; });
-      arr.sort(function(a,b){ return order.indexOf(String(a.id)) - order.indexOf(String(b.id)); });
-      save();
-      justDragged = true;
-      setTimeout(function(){ justDragged = false; }, 300);
-      render();
-    }
     if(swiping){
       swiping = false;
       if(curX < -40){ inner.style.transform = "translateX(-80px)"; openSwipe = inner; }
@@ -400,6 +358,51 @@ function attachGestures(row, inner, listEl, arr, save, render, opts){
   }
   row.addEventListener("pointerup", finish);
   row.addEventListener("pointercancel", finish);
+}
+
+// ---------- SortableJS: 길게 눌러 순서 이동 ----------
+function reorderFromDom(listEl, arr, save, render){
+  var order = [].slice.call(listEl.children)
+    .filter(function(c){ return c.dataset && c.dataset.id; })
+    .map(function(c){ return c.dataset.id; });
+  arr.sort(function(a,b){ return order.indexOf(String(a.id)) - order.indexOf(String(b.id)); });
+  save();
+  justDragged = true;
+  setTimeout(function(){ justDragged = false; }, 300);
+  render();
+}
+function initSortables(){
+  if(typeof Sortable === "undefined") return;
+  var taskList = document.getElementById("task-list");
+  new Sortable(taskList, {
+    animation: 150,
+    delay: 350,
+    delayOnTouchOnly: true,
+    touchStartThreshold: 5,
+    draggable: ".task-wrap",
+    ghostClass: "sort-ghost",
+    onChoose: function(){ if(navigator.vibrate) navigator.vibrate(40); closeSwipe(); },
+    onStart: function(){ sorting = true; },
+    onEnd: function(){
+      sorting = false;
+      reorderFromDom(taskList, tasks, saveTasks, renderToday);
+    }
+  });
+  var todoList = document.getElementById("todo-list");
+  new Sortable(todoList, {
+    animation: 150,
+    delay: 350,
+    delayOnTouchOnly: true,
+    touchStartThreshold: 5,
+    draggable: ".todo-item",
+    ghostClass: "sort-ghost",
+    onChoose: function(){ if(navigator.vibrate) navigator.vibrate(40); },
+    onStart: function(){ sorting = true; },
+    onEnd: function(){
+      sorting = false;
+      reorderFromDom(todoList, todos, saveTodos, renderTodo);
+    }
+  });
 }
 
 // ---------- Routine 페이지에서 직접 추가 ----------
@@ -582,7 +585,6 @@ function renderTodo(){
       }
     };
     el.appendChild(chk); el.appendChild(txt); el.appendChild(del);
-    attachGestures(el, el, list, todos, saveTodos, renderTodo, { swipe:false });
     list.appendChild(el);
   });
 }
@@ -700,6 +702,10 @@ setInterval(function(){
 }, 30000);
 
 renderToday();
+initSortables();
+// 길게 누를 때 브라우저 기본 메뉴(텍스트 선택 등) 방지
+document.getElementById("task-list").addEventListener("contextmenu", function(e){ e.preventDefault(); });
+document.getElementById("todo-list").addEventListener("contextmenu", function(e){ e.preventDefault(); });
 
 // PWA 서비스 워커 (오프라인 지원)
 if ("serviceWorker" in navigator) {
