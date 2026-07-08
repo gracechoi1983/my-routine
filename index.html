@@ -129,6 +129,7 @@
   /* 길게 눌러 순서 이동 */
   .task, .todo-item { user-select:none; -webkit-user-select:none; }
   .sort-ghost { opacity:.4; }
+  .drag-handle { touch-action:none; cursor:grab; color:#C9B49E; font-size:20px; font-weight:800; padding:8px 2px 8px 10px; flex-shrink:0; user-select:none; -webkit-user-select:none; }
   .emoji-btn { width:48px; flex-shrink:0; border:1.5px solid #EEDCC8; border-radius:14px; background:#FFFBF6; font-size:20px; cursor:pointer; }
   #routine-emoji-row { margin:8px 20px 0; }
 
@@ -161,7 +162,7 @@
   </div>
   <div class="emoji-row" id="routine-emoji-row" style="display:none"></div>
   <div class="list" id="task-list"></div>
-  <div class="hint">아이콘 탭=완료 · 이름 탭=수정 · 꾹 누르면 순서 이동 · 왼쪽으로 밀면 삭제</div>
+  <div class="hint">아이콘 탭=완료 · 이름 탭=수정 · ≡를 잡고 끌면 순서 이동 · 왼쪽으로 밀면 삭제</div>
 </div>
 
 <!-- To-do -->
@@ -290,7 +291,10 @@ function renderToday(){
       var v = prompt("루틴 이름 수정", t.name);
       if(v!==null && v.trim()){ t.name = v.trim(); saveTasks(); renderToday(); }
     };
-    el.appendChild(iconBtn); el.appendChild(name);
+    var handle = document.createElement("span");
+    handle.className = "drag-handle";
+    handle.textContent = "≡";
+    el.appendChild(iconBtn); el.appendChild(name); el.appendChild(handle);
     wrap.appendChild(delBtn); wrap.appendChild(el);
     attachSwipe(wrap, el);
     listEl.appendChild(wrap);
@@ -326,6 +330,7 @@ function attachSwipe(row, inner){
     if(swiping) e.preventDefault();
   }, { passive:false });
   row.addEventListener("pointerdown", function(e){
+    if(e.target && e.target.closest && e.target.closest(".drag-handle")) return;
     sX = e.clientX; sY = e.clientY; curX = 0;
     if(openSwipe && openSwipe !== inner){
       closeSwipe();
@@ -336,6 +341,7 @@ function attachSwipe(row, inner){
   });
   row.addEventListener("pointermove", function(e){
     if(sorting) return;
+    if(e.target && e.target.closest && e.target.closest(".drag-handle")) return;
     var dx = e.clientX - sX, dy = e.clientY - sY;
     if(swiping){
       curX = Math.max(-80, Math.min(0, dx));
@@ -376,9 +382,7 @@ function initSortables(){
   var taskList = document.getElementById("task-list");
   new Sortable(taskList, {
     animation: 150,
-    delay: 350,
-    delayOnTouchOnly: true,
-    touchStartThreshold: 5,
+    handle: ".drag-handle",
     draggable: ".task-wrap",
     ghostClass: "sort-ghost",
     onChoose: function(){ if(navigator.vibrate) navigator.vibrate(40); closeSwipe(); },
@@ -391,9 +395,7 @@ function initSortables(){
   var todoList = document.getElementById("todo-list");
   new Sortable(todoList, {
     animation: 150,
-    delay: 350,
-    delayOnTouchOnly: true,
-    touchStartThreshold: 5,
+    handle: ".drag-handle",
     draggable: ".todo-item",
     ghostClass: "sort-ghost",
     onChoose: function(){ if(navigator.vibrate) navigator.vibrate(40); },
@@ -584,7 +586,10 @@ function renderTodo(){
         saveTodos(); renderTodo();
       }
     };
-    el.appendChild(chk); el.appendChild(txt); el.appendChild(del);
+    var handle = document.createElement("span");
+    handle.className = "drag-handle";
+    handle.textContent = "≡";
+    el.appendChild(chk); el.appendChild(txt); el.appendChild(del); el.appendChild(handle);
     list.appendChild(el);
   });
 }
