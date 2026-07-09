@@ -623,20 +623,37 @@ function connectGcal(){
       : "구글 로그인 모듈을 불러오는 중이에요. 잠시 후 다시 눌러주세요.";
     return;
   }
-  if(!gcalTokenClient){
-    gcalTokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: GOOGLE_CLIENT_ID,
-      scope: "https://www.googleapis.com/auth/calendar.readonly",
-      callback: function(resp){
-        if(resp && resp.access_token){
-          gcalToken = resp.access_token;
-          sSet("gcal_connected","1");
-          fetchGcalEvents();
-        }
+  gcalTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: "https://www.googleapis.com/auth/calendar.readonly",
+    hint: sGet("gcal_hint") || "",
+    callback: function(resp){
+      if(resp && resp.access_token){
+        gcalToken = resp.access_token;
+        sSet("gcal_connected","1");
+        // 토큰 저장: 유효시간 동안은 인증창 없이 재사용
+        var exp = Date.now() + (Number(resp.expires_in || 3600) - 60) * 1000;
+        sSet("gcal_token", JSON.stringify({ t: resp.access_token, exp: exp }));
+        if(!sGet("gcal_hint")) saveGcalHint();
+        fetchGcalEvents();
       }
-    });
-  }
+    }
+  });
   gcalTokenClient.requestAccessToken({ prompt: sGet("gcal_connected") ? "" : "consent" });
+}
+// 계정 이메일을 저장해두면 다음 인증 때 계정 선택창이 생략됨
+function saveGcalHint(){
+  fetch("https://www.googleapis.com/calendar/v3/calendars/primary", { headers: { "Authorization": "Bearer " + gcalToken } })
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if(d && d.id) sSet("gcal_hint", d.id); })
+    .catch(function(){});
+}
+function getSavedGcalToken(){
+  try {
+    var s = JSON.parse(sGet("gcal_token"));
+    if(s && s.t && s.exp > Date.now()) return s.t;
+  } catch(e){}
+  return null;
 }
 
 function fetchGcalEvents(){
@@ -680,6 +697,7 @@ function fetchGcalEvents(){
     .catch(function(){
       note.textContent = "일정을 불러오지 못했어요. 다시 연결해주세요.";
       gcalToken = null;
+      sSet("gcal_token", "");
     });
 }
 
@@ -692,8 +710,11 @@ function showPage(p){
   if(p==="today") renderToday();
   if(p==="todo"){
     renderTodo();
-    // 이전에 연결한 적 있으면 자동으로 일정 로드 시도
-    if(!gcalToken && sGet("gcal_connected") && gcalReady()) connectGcal();
+    if(!gcalToken){
+      var saved = getSavedGcalToken();
+      if(saved){ gcalToken = saved; fetchGcalEvents(); }
+      else if(sGet("gcal_connected") && gcalReady()) connectGcal();
+    }
   }
   if(p==="history"){ initCalIfNeeded(); renderCal(); }
 }
