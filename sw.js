@@ -1,4 +1,4 @@
-const CACHE = "routine-v9";
+const CACHE = "routine-v10";
 const FILES = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png"];
 const SORTABLE_CDN = "https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js";
 self.addEventListener("install", e => {

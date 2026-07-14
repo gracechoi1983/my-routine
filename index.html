@@ -141,6 +141,23 @@
   .icon-btn { width:46px; height:46px; border-radius:50%; border:2px dashed #E8D5C0; background:none; display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0; position:relative; cursor:pointer; padding:0; }
   .icon-btn.on { border:2px solid #FFB25C; background:#FFF8EF; }
   .icon-btn .badge { position:absolute; right:-5px; bottom:-5px; width:20px; height:20px; border-radius:50%; background:#FF8A5C; color:#fff; font-size:12px; display:flex; align-items:center; justify-content:center; font-weight:800; }
+
+  /* 타이머 */
+  .timer-chip { border:1px solid #FFB25C; background:#FFF0E0; color:#D97742; border-radius:10px; padding:5px 8px; font-size:12px; font-weight:700; cursor:pointer; flex-shrink:0; font-family:inherit; white-space:nowrap; }
+  #sheet-back { position:fixed; inset:0; background:rgba(74,59,50,.4); z-index:30; display:none; }
+  #timer-sheet { position:fixed; left:0; right:0; bottom:0; background:#FFF6EC; border-radius:24px 24px 0 0; padding:18px 20px calc(24px + env(safe-area-inset-bottom)); z-index:31; display:none; box-shadow:0 -6px 24px rgba(160,120,80,.25); }
+  .sheet-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .sheet-head b { font-size:16px; }
+  .sheet-head button { background:#FFF0E0; border:none; border-radius:10px; width:34px; height:34px; font-size:15px; cursor:pointer; color:#4A3B32; }
+  .timer-presets { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }
+  .timer-presets button { border:1px solid #EEDCC8; background:#FFFBF6; color:#8A6F58; border-radius:10px; padding:6px 11px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; }
+  .timer-presets button.sel { border-color:#FF8A5C; background:#FFF0E0; color:#D97742; }
+  .timer-presets input { width:64px; padding:6px 8px; border:1px solid #EEDCC8; border-radius:10px; font-size:13px; font-family:inherit; background:#FFFBF6; color:#4A3B32; outline:none; text-align:center; }
+  .timer-circle { display:flex; justify-content:center; margin-bottom:12px; }
+  .timer-btns { display:flex; gap:8px; justify-content:center; }
+  .timer-btns button { border:none; border-radius:12px; padding:12px 0; font-size:15px; font-weight:800; cursor:pointer; font-family:inherit; }
+  #timer-start { background:linear-gradient(90deg,#FFB25C,#FF8A5C); color:#fff; width:150px; }
+  #timer-reset { background:#FFF0E0; color:#4A3B32; width:52px; }
 </style>
 </head>
 <body>
@@ -199,6 +216,29 @@
   </div>
   <div class="cal" id="cal"></div>
   <div class="day-detail" id="day-detail" style="display:none"></div>
+</div>
+
+<!-- 타이머 하단 시트 -->
+<div id="sheet-back" onclick="closeTimer()"></div>
+<div id="timer-sheet">
+  <div class="sheet-head">
+    <b id="timer-name"></b>
+    <button onclick="closeTimer()" aria-label="닫기">✕</button>
+  </div>
+  <div class="timer-presets" id="timer-presets"></div>
+  <div class="timer-circle">
+    <svg width="170" height="170" viewBox="0 0 170 170">
+      <circle cx="85" cy="85" r="72" fill="none" stroke="#FFE8D6" stroke-width="12"/>
+      <circle id="timer-arc" cx="85" cy="85" r="72" fill="none" stroke="#FF8A5C" stroke-width="12"
+        stroke-linecap="round" stroke-dasharray="452.4" stroke-dashoffset="0" transform="rotate(-90 85 85)"/>
+      <text id="timer-time" x="85" y="94" text-anchor="middle" font-size="30" font-weight="800" fill="#4A3B32">10:00</text>
+    </svg>
+  </div>
+  <div class="timer-btns">
+    <button id="timer-start" onclick="startPauseTimer()">▶ 시작</button>
+    <button id="timer-reset" onclick="resetTimer()" aria-label="재설정">↺</button>
+  </div>
+  <div id="timer-msg" class="hint" style="display:none">🎉 타이머 완료! 스탬프가 찍혔어요</div>
 </div>
 
 <nav>
@@ -292,10 +332,15 @@ function renderToday(){
       var v = prompt("루틴 이름 수정", t.name);
       if(v!==null && v.trim()){ t.name = v.trim(); saveTasks(); renderToday(); }
     };
+    var chip = document.createElement("button");
+    chip.className = "timer-chip";
+    chip.id = "chip-" + t.id;
+    chip.textContent = "⏱ " + (t.timer || 10) + "분";
+    chip.onclick = function(){ if(!justDragged) openTimer(t.id); };
     var handle = document.createElement("span");
     handle.className = "drag-handle";
     handle.textContent = "≡";
-    el.appendChild(iconBtn); el.appendChild(name); el.appendChild(handle);
+    el.appendChild(iconBtn); el.appendChild(name); el.appendChild(chip); el.appendChild(handle);
     wrap.appendChild(delBtn); wrap.appendChild(el);
     attachSwipe(wrap, el);
     listEl.appendChild(wrap);
@@ -733,6 +778,176 @@ function fetchGcalEvents(){
     });
 }
 
+// ---------- 타이머 ----------
+var TIMER_CIRC = 452.4;
+var timerState = { id:null, total:600, left:600, endAt:null, running:false };
+var timerTick = null;
+
+function timerTask(){
+  for(var i=0;i<tasks.length;i++) if(tasks[i].id === timerState.id) return tasks[i];
+  return null;
+}
+function fmtTime(s){ return String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0"); }
+function timerRemaining(){
+  return timerState.endAt ? Math.max(0, Math.round((timerState.endAt - Date.now())/1000)) : timerState.left;
+}
+function openTimer(id){
+  if(timerState.id !== id){
+    if(timerState.running){
+      if(!confirm("진행 중인 타이머를 중단하고 새로 시작할까요?")){
+        showTimerSheet(); return;
+      }
+      clearInterval(timerTick);
+    }
+    timerState.id = id;
+    var t = timerTask();
+    var mins = (t && t.timer) || 10;
+    timerState.total = mins*60;
+    timerState.left = timerState.total;
+    timerState.endAt = null;
+    timerState.running = false;
+    sSet("routine_timer","");
+  }
+  showTimerSheet();
+}
+function showTimerSheet(){
+  var t = timerTask();
+  if(!t) return;
+  document.getElementById("timer-name").textContent = t.emoji + " " + t.name;
+  document.getElementById("timer-msg").style.display = "none";
+  renderTimerPresets();
+  updateTimerUI();
+  document.getElementById("sheet-back").style.display = "block";
+  document.getElementById("timer-sheet").style.display = "block";
+}
+function closeTimer(){
+  document.getElementById("sheet-back").style.display = "none";
+  document.getElementById("timer-sheet").style.display = "none";
+}
+function renderTimerPresets(){
+  var box = document.getElementById("timer-presets");
+  box.innerHTML = "";
+  [5,10,15,20,30].forEach(function(m){
+    var b = document.createElement("button");
+    b.textContent = m + "분";
+    b.className = (m*60 === timerState.total) ? "sel" : "";
+    b.onclick = function(){ setTimerTotal(m*60); };
+    box.appendChild(b);
+  });
+  var inp = document.createElement("input");
+  inp.type = "number"; inp.min = "1"; inp.max = "180";
+  inp.placeholder = "직접(분)";
+  inp.value = ([5,10,15,20,30].indexOf(timerState.total/60) === -1) ? String(Math.round(timerState.total/60)) : "";
+  inp.onchange = function(){
+    var v = parseInt(inp.value, 10);
+    if(v > 0 && v <= 180) setTimerTotal(v*60);
+  };
+  box.appendChild(inp);
+}
+function setTimerTotal(sec){
+  timerState.total = sec;
+  timerState.left = sec;
+  timerState.endAt = null;
+  timerState.running = false;
+  sSet("routine_timer","");
+  var t = timerTask();
+  if(t){ t.timer = Math.round(sec/60); saveTasks(); renderToday(); }
+  document.getElementById("timer-msg").style.display = "none";
+  renderTimerPresets();
+  updateTimerUI();
+}
+function updateTimerUI(){
+  var l = timerRemaining();
+  if(timerState.running) timerState.left = l;
+  var timeEl = document.getElementById("timer-time");
+  if(timeEl) timeEl.textContent = fmtTime(l);
+  var arc = document.getElementById("timer-arc");
+  if(arc) arc.setAttribute("stroke-dashoffset", String(TIMER_CIRC * (1 - (timerState.total ? l/timerState.total : 0))));
+  var btn = document.getElementById("timer-start");
+  if(btn) btn.textContent = timerState.running ? "⏸ 일시정지" : "▶ 시작";
+  var chip = document.getElementById("chip-" + timerState.id);
+  if(chip) chip.textContent = timerState.running ? "⏱ " + fmtTime(l) : "⏱ " + Math.round(timerState.total/60) + "분";
+}
+function startTimerTick(){
+  clearInterval(timerTick);
+  timerTick = setInterval(function(){
+    if(!timerState.running) return;
+    if(timerRemaining() <= 0) finishTimer();
+    else updateTimerUI();
+  }, 500);
+}
+function startPauseTimer(){
+  if(!timerTask()) return;
+  if(timerState.running){
+    timerState.left = timerRemaining();
+    timerState.endAt = null;
+    timerState.running = false;
+    clearInterval(timerTick);
+    sSet("routine_timer","");
+  } else {
+    if(timerState.left <= 0) timerState.left = timerState.total;
+    ensureAudio();
+    timerState.endAt = Date.now() + timerState.left*1000;
+    timerState.running = true;
+    var t = timerTask();
+    t.timer = Math.round(timerState.total/60); saveTasks();
+    sSet("routine_timer", JSON.stringify({ id:timerState.id, total:timerState.total, endAt:timerState.endAt }));
+    document.getElementById("timer-msg").style.display = "none";
+    startTimerTick();
+  }
+  updateTimerUI();
+}
+function resetTimer(){
+  timerState.left = timerState.total;
+  timerState.endAt = null;
+  timerState.running = false;
+  clearInterval(timerTick);
+  sSet("routine_timer","");
+  document.getElementById("timer-msg").style.display = "none";
+  updateTimerUI();
+}
+function stampTask(id){
+  var key = todayStr();
+  if(!log[key]) log[key] = {};
+  if(!log[key][id]){ log[key][id] = true; saveLog(); }
+  renderToday();
+}
+function finishTimer(){
+  timerState.running = false;
+  timerState.endAt = null;
+  timerState.left = 0;
+  clearInterval(timerTick);
+  sSet("routine_timer","");
+  stampTask(timerState.id);
+  if(navigator.vibrate) navigator.vibrate([200,100,200,100,400]);
+  beep();
+  document.getElementById("timer-msg").style.display = "block";
+  updateTimerUI();
+}
+function ensureAudio(){
+  try {
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    if(Ctx && !window._actx) window._actx = new Ctx();
+    if(window._actx && window._actx.state === "suspended") window._actx.resume();
+  } catch(e){}
+}
+function beep(){
+  try {
+    var ctx = window._actx;
+    if(!ctx) return;
+    for(var i=0;i<3;i++){
+      var o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.value = 880;
+      var t0 = ctx.currentTime + i*0.3;
+      g.gain.setValueAtTime(0.001, t0);
+      g.gain.exponentialRampToValueAtTime(0.4, t0+0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, t0+0.25);
+      o.start(t0); o.stop(t0+0.26);
+    }
+  } catch(e){}
+}
+
 // ---------- 탭 ----------
 function showPage(p){
   ["today","todo","history"].forEach(function(n){
@@ -761,6 +976,28 @@ setInterval(function(){
 
 renderToday();
 initSortables();
+
+// 앱 재시작 시 진행 중이던 타이머 복원
+(function(){
+  try {
+    var s = JSON.parse(sGet("routine_timer"));
+    if(s && s.id && s.endAt){
+      timerState.id = s.id;
+      timerState.total = s.total || 600;
+      if(s.endAt > Date.now()){
+        timerState.endAt = s.endAt;
+        timerState.running = true;
+        timerState.left = Math.round((s.endAt - Date.now())/1000);
+        startTimerTick();
+        updateTimerUI();
+      } else {
+        // 앱이 꺼진 사이에 끝난 타이머: 스탬프 처리
+        stampTask(s.id);
+        sSet("routine_timer","");
+      }
+    }
+  } catch(e){}
+})();
 // 길게 누를 때 브라우저 기본 메뉴(텍스트 선택 등) 방지
 document.getElementById("task-list").addEventListener("contextmenu", function(e){ e.preventDefault(); });
 document.getElementById("todo-list").addEventListener("contextmenu", function(e){ e.preventDefault(); });
