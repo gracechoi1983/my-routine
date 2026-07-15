@@ -919,7 +919,7 @@ function finishTimer(){
   clearInterval(timerTick);
   sSet("routine_timer","");
   stampTask(timerState.id);
-  if(navigator.vibrate) navigator.vibrate([200,100,200,100,400]);
+  if(navigator.vibrate) navigator.vibrate([300,150,300,150,300,150,600,300,300,150,300,150,600]);
   beep();
   document.getElementById("timer-msg").style.display = "block";
   updateTimerUI();
@@ -935,15 +935,21 @@ function beep(){
   try {
     var ctx = window._actx;
     if(!ctx) return;
-    for(var i=0;i<3;i++){
-      var o = ctx.createOscillator(), g = ctx.createGain();
-      o.connect(g); g.connect(ctx.destination);
-      o.frequency.value = 880;
-      var t0 = ctx.currentTime + i*0.3;
-      g.gain.setValueAtTime(0.001, t0);
-      g.gain.exponentialRampToValueAtTime(0.4, t0+0.02);
-      g.gain.exponentialRampToValueAtTime(0.001, t0+0.25);
-      o.start(t0); o.stop(t0+0.26);
+    // 알람: 삐-삐 2연타 x 8회, 약 6초간
+    for(var i=0;i<8;i++){
+      var base = ctx.currentTime + i*0.75;
+      [0, 0.22].forEach(function(off){
+        var o = ctx.createOscillator(), g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type = "square";
+        o.frequency.value = 1200;
+        var t0 = base + off;
+        g.gain.setValueAtTime(0.001, t0);
+        g.gain.exponentialRampToValueAtTime(0.9, t0+0.02);
+        g.gain.setValueAtTime(0.9, t0+0.15);
+        g.gain.exponentialRampToValueAtTime(0.001, t0+0.2);
+        o.start(t0); o.stop(t0+0.21);
+      });
     }
   } catch(e){}
 }
