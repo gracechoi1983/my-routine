@@ -158,6 +158,19 @@
   .timer-btns button { border:none; border-radius:12px; padding:12px 0; font-size:15px; font-weight:800; cursor:pointer; font-family:inherit; }
   #timer-start { background:linear-gradient(90deg,#FFB25C,#FF8A5C); color:#fff; width:150px; }
   #timer-reset { background:#FFF0E0; color:#4A3B32; width:52px; }
+
+  /* 루틴 설정 시트 (이름 + 요일) */
+  #edit-back { position:fixed; inset:0; background:rgba(74,59,50,.4); z-index:30; display:none; }
+  #edit-sheet { position:fixed; left:0; right:0; bottom:0; background:#FFF6EC; border-radius:24px 24px 0 0; padding:18px 20px calc(24px + env(safe-area-inset-bottom)); z-index:31; display:none; box-shadow:0 -6px 24px rgba(160,120,80,.25); }
+  .sheet-input { width:100%; padding:12px 14px; border:1.5px solid #EEDCC8; border-radius:12px; font-size:15px; font-family:inherit; background:#FFFBF6; color:#4A3B32; outline:none; margin-bottom:12px; }
+  .sheet-label { font-size:13px; font-weight:700; color:#8A6F58; margin-bottom:6px; }
+  .day-presets { display:flex; gap:6px; margin-bottom:8px; }
+  .day-presets button { flex:1; padding:8px 0; border-radius:10px; border:1px solid #EEDCC8; background:#FFFBF6; color:#8A6F58; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; }
+  .day-chips { display:flex; gap:5px; margin-bottom:16px; }
+  .day-chips button { flex:1; padding:10px 0; border-radius:10px; border:1px solid #EEDCC8; background:#FFFBF6; color:#8A6F58; font-weight:700; cursor:pointer; font-family:inherit; font-size:14px; }
+  .day-chips button.sel { border-color:#FF8A5C; background:#FFF0E0; color:#D97742; }
+  .sheet-save { width:100%; padding:13px; border:none; border-radius:12px; background:linear-gradient(90deg,#FFB25C,#FF8A5C); color:#fff; font-weight:800; font-size:15px; cursor:pointer; font-family:inherit; }
+  .day-sub { display:block; font-size:11px; color:#B8A28C; font-weight:600; margin-top:2px; }
 </style>
 </head>
 <body>
@@ -216,6 +229,24 @@
   </div>
   <div class="cal" id="cal"></div>
   <div class="day-detail" id="day-detail" style="display:none"></div>
+</div>
+
+<!-- 루틴 설정 시트 -->
+<div id="edit-back" onclick="closeEditTask()"></div>
+<div id="edit-sheet">
+  <div class="sheet-head">
+    <b>루틴 설정</b>
+    <button onclick="closeEditTask()" aria-label="닫기">✕</button>
+  </div>
+  <input id="edit-name" type="text" maxlength="30" class="sheet-input" placeholder="루틴 이름">
+  <div class="sheet-label">하는 요일</div>
+  <div class="day-presets">
+    <button onclick="setEditDays([0,1,2,3,4,5,6])">매일</button>
+    <button onclick="setEditDays([1,2,3,4,5])">평일</button>
+    <button onclick="setEditDays([0,6])">주말</button>
+  </div>
+  <div class="day-chips" id="day-chips"></div>
+  <button class="sheet-save" onclick="saveEditTask()">저장</button>
 </div>
 
 <!-- 타이머 하단 시트 -->
@@ -304,7 +335,9 @@ function renderToday(){
   var listEl = document.getElementById("task-list");
   listEl.innerHTML = "";
   var doneCount = 0;
-  tasks.forEach(function(t){
+  var dowToday = d.getDay();
+  var todays = tasks.filter(function(t){ return !t.days || t.days.indexOf(dowToday) !== -1; });
+  todays.forEach(function(t){
     var isDone = !!done[t.id];
     if(isDone) doneCount++;
     var wrap = document.createElement("div");
@@ -327,11 +360,13 @@ function renderToday(){
     iconBtn.onclick = function(){ if(!justDragged) toggle(t.id); };
     var name = document.createElement("span");
     name.className = "name"; name.textContent = t.name;
-    name.onclick = function(){
-      if(justDragged) return;
-      var v = prompt("루틴 이름 수정", t.name);
-      if(v!==null && v.trim()){ t.name = v.trim(); saveTasks(); renderToday(); }
-    };
+    if(t.days){
+      var sub = document.createElement("span");
+      sub.className = "day-sub";
+      sub.textContent = dayLabel(t.days);
+      name.appendChild(sub);
+    }
+    name.onclick = function(){ if(!justDragged) openEditTask(t.id); };
     var chip = document.createElement("button");
     chip.className = "timer-chip";
     chip.id = "chip-" + t.id;
@@ -345,7 +380,7 @@ function renderToday(){
     attachSwipe(wrap, el);
     listEl.appendChild(wrap);
   });
-  var total = tasks.length;
+  var total = todays.length;
   var pct = total ? Math.round(doneCount/total*100) : 0;
   document.getElementById("prog-text").textContent = doneCount+" / "+total+" 완료";
   document.getElementById("prog-pct").textContent = pct+"%";
@@ -417,7 +452,13 @@ function reorderFromDom(listEl, arr, save, render){
   var order = [].slice.call(listEl.children)
     .filter(function(c){ return c.dataset && c.dataset.id; })
     .map(function(c){ return c.dataset.id; });
-  arr.sort(function(a,b){ return order.indexOf(String(a.id)) - order.indexOf(String(b.id)); });
+  // 화면에 보이는 항목들만 새 순서로 재배치 (오늘 요일이 아닌 루틴은 제자리 유지)
+  var visIdx = [];
+  arr.forEach(function(t, i){ if(order.indexOf(String(t.id)) !== -1) visIdx.push(i); });
+  var visSorted = order.map(function(id){
+    for(var i=0;i<arr.length;i++) if(String(arr[i].id) === id) return arr[i];
+  }).filter(Boolean);
+  visIdx.forEach(function(pos, k){ if(visSorted[k]) arr[pos] = visSorted[k]; });
   save();
   justDragged = true;
   setTimeout(function(){ justDragged = false; }, 300);
@@ -517,7 +558,9 @@ function renderCal(){
       var done = log[key] ? Object.keys(log[key]).length : 0;
       var cell = document.createElement("div");
       cell.className = "cell"+(key===tStr?" today":"")+(selDay===key?" sel":"");
-      var mini = done>0 ? '<span class="mini">'+(done>=tasks.length&&tasks.length>0?"🌟":"✅"+done)+'</span>' : '<span class="mini">&nbsp;</span>';
+      var dw = new Date(calY, calM, day).getDay();
+      var totalForDay = tasks.filter(function(t){ return !t.days || t.days.indexOf(dw) !== -1; }).length;
+      var mini = done>0 ? '<span class="mini">'+(done>=totalForDay&&totalForDay>0?"🌟":"✅"+done)+'</span>' : '<span class="mini">&nbsp;</span>';
       cell.innerHTML = day + mini;
       cell.onclick = function(){ selDay = key; renderCal(); renderDayDetail(key); };
       cal.appendChild(cell);
@@ -776,6 +819,64 @@ function fetchGcalEvents(){
       gcalToken = null;
       sSet("gcal_token", "");
     });
+}
+
+// ---------- 루틴 설정 (이름 + 요일) ----------
+var editingTaskId = null, editDays = [];
+function dayLabel(days){
+  var W = ["일","월","화","수","목","금","토"];
+  var s = days.slice().sort(function(a,b){ return a-b; });
+  if(s.join(",") === "1,2,3,4,5") return "평일";
+  if(s.join(",") === "0,6") return "주말";
+  return s.map(function(d){ return W[d]; }).join("·");
+}
+function findTask(id){
+  for(var i=0;i<tasks.length;i++) if(tasks[i].id === id) return tasks[i];
+  return null;
+}
+function openEditTask(id){
+  var t = findTask(id);
+  if(!t) return;
+  editingTaskId = id;
+  document.getElementById("edit-name").value = t.name;
+  editDays = t.days ? t.days.slice() : [0,1,2,3,4,5,6];
+  renderDayChips();
+  document.getElementById("edit-back").style.display = "block";
+  document.getElementById("edit-sheet").style.display = "block";
+}
+function closeEditTask(){
+  document.getElementById("edit-back").style.display = "none";
+  document.getElementById("edit-sheet").style.display = "none";
+}
+function renderDayChips(){
+  var W = ["일","월","화","수","목","금","토"];
+  var box = document.getElementById("day-chips");
+  box.innerHTML = "";
+  W.forEach(function(w, dnum){
+    var b = document.createElement("button");
+    b.textContent = w;
+    b.className = editDays.indexOf(dnum) !== -1 ? "sel" : "";
+    b.onclick = function(){
+      var i = editDays.indexOf(dnum);
+      if(i === -1) editDays.push(dnum); else editDays.splice(i, 1);
+      renderDayChips();
+    };
+    box.appendChild(b);
+  });
+}
+function setEditDays(days){ editDays = days.slice(); renderDayChips(); }
+function saveEditTask(){
+  var t = findTask(editingTaskId);
+  if(!t) return;
+  var v = document.getElementById("edit-name").value.trim();
+  if(!v){ document.getElementById("edit-name").focus(); return; }
+  if(editDays.length === 0){ alert("요일을 하나 이상 선택해주세요"); return; }
+  t.name = v;
+  if(editDays.length === 7) delete t.days;
+  else t.days = editDays.slice().sort(function(a,b){ return a-b; });
+  saveTasks();
+  closeEditTask();
+  renderToday();
 }
 
 // ---------- 타이머 ----------
