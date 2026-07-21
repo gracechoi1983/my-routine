@@ -171,6 +171,35 @@
   .day-chips button.sel { border-color:#FF8A5C; background:#FFF0E0; color:#D97742; }
   .sheet-save { width:100%; padding:13px; border:none; border-radius:12px; background:linear-gradient(90deg,#FFB25C,#FF8A5C); color:#fff; font-weight:800; font-size:15px; cursor:pointer; font-family:inherit; }
   .day-sub { display:block; font-size:11px; color:#B8A28C; font-weight:600; margin-top:2px; }
+
+  /* Vision */
+  .vision-add { width:100%; margin:4px 20px 14px; padding:11px; border:1.5px dashed #FFB25C; border-radius:14px; background:none; color:#D97742; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; }
+  .vision-tabs { display:flex; gap:6px; padding:0 20px 14px; flex-wrap:wrap; }
+  .vision-tabs button { flex:1; min-width:56px; padding:8px 0; border-radius:12px; border:1px solid #EEDCC8; background:#FFFFFF; color:#8A6F58; font-weight:700; font-size:14px; cursor:pointer; font-family:inherit; }
+  .vision-tabs button.sel { border-color:#FF8A5C; background:#FF8A5C; color:#fff; }
+  .vision-timeline { padding:0 20px; }
+  .vision-row { display:flex; gap:12px; cursor:pointer; }
+  .vision-line { position:relative; display:flex; flex-direction:column; align-items:center; width:34px; flex-shrink:0; }
+  .vision-dot { width:34px; height:34px; border-radius:50%; background:#FFFFFF; border:2px solid #FFB25C; display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; }
+  .vision-connector { width:2px; flex:1; background:#F3D9C0; margin:2px 0; }
+  .vision-body { flex:1; padding-bottom:22px; }
+  .vision-month { margin:6px 0 2px; font-size:12px; font-weight:700; color:#D97742; }
+  .vision-text { margin:0; font-size:14px; font-weight:600; color:#4A3B32; }
+  .vision-divider { display:flex; align-items:center; gap:8px; margin:8px 20px 12px; }
+  .vision-divider .line { flex:1; height:1px; background:#EEDCC8; }
+  .vision-divider .label { font-size:12px; font-weight:700; color:#B8926F; white-space:nowrap; }
+  .vision-future { padding:0 20px; }
+  .vision-card { display:flex; align-items:center; gap:12px; background:#FFFFFF; border-radius:14px; padding:12px 14px; margin-bottom:8px; box-shadow:0 1px 4px rgba(160,120,80,.07); cursor:pointer; }
+  .vision-card .vicon { width:38px; height:38px; border-radius:12px; background:#FFF0E0; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+  .vision-card .vtxt { flex:1; font-size:14px; font-weight:600; color:#4A3B32; }
+  .vision-card .vyear { font-size:12px; font-weight:700; color:#B8926F; background:#FFF6EC; border-radius:8px; padding:4px 9px; flex-shrink:0; }
+
+  /* Vision 편집 시트 */
+  #vision-back { position:fixed; inset:0; background:rgba(74,59,50,.4); z-index:30; display:none; }
+  #vision-sheet { position:fixed; left:0; right:0; bottom:0; background:#FFF6EC; border-radius:24px 24px 0 0; padding:18px 20px calc(24px + env(safe-area-inset-bottom)); z-index:31; display:none; max-height:80vh; overflow:auto; box-shadow:0 -6px 24px rgba(160,120,80,.25); }
+  .vision-field-row { display:flex; gap:8px; margin-bottom:14px; }
+  .vision-field-row input, .vision-field-row select { flex:1; min-width:0; padding:12px 10px; border:1.5px solid #EEDCC8; border-radius:12px; font-size:14px; font-family:inherit; background:#FFFBF6; color:#4A3B32; outline:none; }
+  .vision-del-btn { width:100%; margin-top:10px; padding:12px; border:1.5px solid #FFCFC7; border-radius:12px; background:#FFF3F1; color:#C0392B; font-weight:700; font-size:14px; cursor:pointer; font-family:inherit; }
 </style>
 </head>
 <body>
@@ -231,6 +260,54 @@
   <div class="day-detail" id="day-detail" style="display:none"></div>
 </div>
 
+<!-- Vision -->
+<div class="page" id="page-vision">
+  <header>
+    <h1>Vision 🔭</h1>
+    <div class="date">올해의 계획과 나의 비전 보드</div>
+  </header>
+  <button class="vision-add" onclick="openVisionSheet(null)">+ 새 계획 추가</button>
+  <div class="vision-tabs" id="vision-tabs"></div>
+  <div class="vision-timeline" id="vision-timeline"></div>
+  <div class="vision-divider"><span class="line"></span><span class="label">🔭 먼 미래의 비전</span><span class="line"></span></div>
+  <div class="vision-future" id="vision-future"></div>
+  <div class="hint">계획을 탭하면 수정·삭제할 수 있어요.</div>
+</div>
+
+<!-- Vision 편집 시트 -->
+<div id="vision-back" onclick="closeVisionSheet()"></div>
+<div id="vision-sheet">
+  <div class="sheet-head">
+    <b id="vision-sheet-title">비전 추가</b>
+    <button onclick="closeVisionSheet()" aria-label="닫기">✕</button>
+  </div>
+  <div class="todo-add" style="margin:0 0 12px;">
+    <button class="emoji-btn" id="vision-emoji-btn" onclick="toggleVisionEmoji()">🌟</button>
+    <input id="vision-text" type="text" placeholder="계획 내용 (예: 멜번 여행)" maxlength="40">
+  </div>
+  <div class="emoji-row" id="vision-emoji-row" style="display:none; margin-bottom:12px;"></div>
+  <div class="vision-field-row">
+    <input id="vision-year" type="number" placeholder="연도 (예: 2026)">
+    <select id="vision-month">
+      <option value="">월 없음 (먼 미래)</option>
+      <option value="1">1월</option>
+      <option value="2">2월</option>
+      <option value="3">3월</option>
+      <option value="4">4월</option>
+      <option value="5">5월</option>
+      <option value="6">6월</option>
+      <option value="7">7월</option>
+      <option value="8">8월</option>
+      <option value="9">9월</option>
+      <option value="10">10월</option>
+      <option value="11">11월</option>
+      <option value="12">12월</option>
+    </select>
+  </div>
+  <button class="sheet-save" onclick="saveVisionItem()">저장</button>
+  <button class="vision-del-btn" id="vision-del-btn" onclick="deleteVisionItem()" style="display:none">삭제</button>
+</div>
+
 <!-- 루틴 설정 시트 -->
 <div id="edit-back" onclick="closeEditTask()"></div>
 <div id="edit-sheet">
@@ -276,6 +353,7 @@
   <button class="active" id="tab-today" onclick="showPage('today')"><span class="nicon">☀️</span>Routine</button>
   <button id="tab-todo" onclick="showPage('todo')"><span class="nicon">📝</span>To-do</button>
   <button id="tab-history" onclick="showPage('history')"><span class="nicon">📅</span>기록</button>
+  <button id="tab-vision" onclick="showPage('vision')"><span class="nicon">🔭</span>Vision</button>
 </nav>
 
 <script>
@@ -1055,9 +1133,168 @@ function beep(){
   } catch(e){}
 }
 
+// ---------- Vision (연간 계획 + 비전보드) ----------
+function loadVisions(){
+  var raw = sGet("routine_vision");
+  if(raw){ try { return JSON.parse(raw); } catch(e){} }
+  return [];
+}
+function saveVisions(){ sSet("routine_vision", JSON.stringify(visions)); }
+var visions = loadVisions();
+var curVisionYear = null, editingVisionId = null, selVisionEmoji = "🌟";
+var VISION_EMOJIS = ["🌟","✈️","🎓","🏫","💼","🏆","🎯","📚","☕","👨‍👩‍👧‍👦","🏠","🎉","🌏","💪","🎂","🚗","🎨","💰","📖","🧗"];
+
+function visionYears(){
+  var set = {};
+  visions.forEach(function(v){ if(v.month && v.year) set[v.year] = true; });
+  return Object.keys(set).sort();
+}
+function ensureCurVisionYear(){
+  var nowY = String(new Date().getFullYear());
+  var years = visionYears();
+  if(years.indexOf(nowY) === -1) years.push(nowY);
+  years.sort();
+  if(!curVisionYear || years.indexOf(curVisionYear) === -1){
+    curVisionYear = years.indexOf(nowY) !== -1 ? nowY : years[0];
+  }
+  return years;
+}
+function renderVision(){
+  var years = ensureCurVisionYear();
+  var tabs = document.getElementById("vision-tabs");
+  tabs.innerHTML = "";
+  years.forEach(function(y){
+    var b = document.createElement("button");
+    b.textContent = y;
+    b.className = (y === curVisionYear) ? "sel" : "";
+    b.onclick = function(){ curVisionYear = y; renderVision(); };
+    tabs.appendChild(b);
+  });
+
+  var items = visions.filter(function(v){ return v.month && v.year === curVisionYear; })
+    .sort(function(a,b){ return a.month - b.month; });
+  var box = document.getElementById("vision-timeline");
+  box.innerHTML = "";
+  if(items.length === 0){
+    box.innerHTML = '<p class="hint" style="padding:6px 4px 16px;">'+curVisionYear+'년에 등록된 계획이 없어요</p>';
+  } else {
+    items.forEach(function(v, i){
+      var row = document.createElement("div");
+      row.className = "vision-row";
+      row.onclick = function(){ openVisionSheet(v.id); };
+      var connector = (i < items.length-1) ? '<div class="vision-connector"></div>' : '';
+      row.innerHTML =
+        '<div class="vision-line"><div class="vision-dot">'+v.emoji+'</div>'+connector+'</div>'
+        +'<div class="vision-body"><p class="vision-month">'+v.month+'월</p><p class="vision-text">'+esc(v.text)+'</p></div>';
+      box.appendChild(row);
+    });
+  }
+
+  var future = visions.filter(function(v){ return !v.month; })
+    .sort(function(a,b){
+      var ay = a.year || "9999", by = b.year || "9999";
+      return ay < by ? -1 : ay > by ? 1 : 0;
+    });
+  var fbox = document.getElementById("vision-future");
+  fbox.innerHTML = "";
+  if(future.length === 0){
+    fbox.innerHTML = '<p class="hint" style="padding:0 4px 16px;">아직 등록된 먼 미래 계획이 없어요</p>';
+  } else {
+    future.forEach(function(v){
+      var card = document.createElement("div");
+      card.className = "vision-card";
+      card.onclick = function(){ openVisionSheet(v.id); };
+      card.innerHTML =
+        '<span class="vicon">'+v.emoji+'</span>'
+        +'<span class="vtxt">'+esc(v.text)+'</span>'
+        +'<span class="vyear">'+(v.year || "미정")+'</span>';
+      fbox.appendChild(card);
+    });
+  }
+}
+function findVision(id){
+  for(var i=0;i<visions.length;i++) if(visions[i].id === id) return visions[i];
+  return null;
+}
+function toggleVisionEmoji(){
+  var row = document.getElementById("vision-emoji-row");
+  if(row.style.display === "none"){
+    row.innerHTML = "";
+    VISION_EMOJIS.forEach(function(em){
+      var b = document.createElement("button");
+      b.textContent = em;
+      b.className = (em === selVisionEmoji) ? "sel" : "";
+      b.onclick = function(){
+        selVisionEmoji = em;
+        document.getElementById("vision-emoji-btn").textContent = em;
+        row.style.display = "none";
+      };
+      row.appendChild(b);
+    });
+    row.style.display = "flex";
+  } else {
+    row.style.display = "none";
+  }
+}
+function openVisionSheet(id){
+  editingVisionId = id;
+  document.getElementById("vision-emoji-row").style.display = "none";
+  if(id){
+    var v = findVision(id);
+    if(!v) return;
+    document.getElementById("vision-sheet-title").textContent = "비전 수정";
+    document.getElementById("vision-text").value = v.text;
+    document.getElementById("vision-year").value = v.year || "";
+    document.getElementById("vision-month").value = v.month || "";
+    selVisionEmoji = v.emoji;
+    document.getElementById("vision-del-btn").style.display = "block";
+  } else {
+    document.getElementById("vision-sheet-title").textContent = "비전 추가";
+    document.getElementById("vision-text").value = "";
+    document.getElementById("vision-year").value = curVisionYear || String(new Date().getFullYear());
+    document.getElementById("vision-month").value = "";
+    selVisionEmoji = "🌟";
+    document.getElementById("vision-del-btn").style.display = "none";
+  }
+  document.getElementById("vision-emoji-btn").textContent = selVisionEmoji;
+  document.getElementById("vision-back").style.display = "block";
+  document.getElementById("vision-sheet").style.display = "block";
+}
+function closeVisionSheet(){
+  document.getElementById("vision-back").style.display = "none";
+  document.getElementById("vision-sheet").style.display = "none";
+}
+function saveVisionItem(){
+  var text = document.getElementById("vision-text").value.trim();
+  if(!text){ document.getElementById("vision-text").focus(); return; }
+  var year = document.getElementById("vision-year").value.trim();
+  var month = document.getElementById("vision-month").value;
+  month = month ? parseInt(month, 10) : null;
+  if(editingVisionId){
+    var v = findVision(editingVisionId);
+    v.text = text; v.year = year; v.month = month; v.emoji = selVisionEmoji;
+  } else {
+    var maxId = 0;
+    visions.forEach(function(vv){ if(vv.id > maxId) maxId = vv.id; });
+    visions.push({ id: maxId+1, emoji: selVisionEmoji, text: text, year: year, month: month });
+  }
+  saveVisions();
+  closeVisionSheet();
+  renderVision();
+}
+function deleteVisionItem(){
+  if(!editingVisionId) return;
+  if(confirm("이 비전 항목을 삭제할까요?")){
+    visions = visions.filter(function(v){ return v.id !== editingVisionId; });
+    saveVisions();
+    closeVisionSheet();
+    renderVision();
+  }
+}
+
 // ---------- 탭 ----------
 function showPage(p){
-  ["today","todo","history"].forEach(function(n){
+  ["today","todo","history","vision"].forEach(function(n){
     document.getElementById("page-"+n).classList.toggle("show", n===p);
     document.getElementById("tab-"+n).classList.toggle("active", n===p);
   });
@@ -1071,6 +1308,7 @@ function showPage(p){
     }
   }
   if(p==="history"){ initCalIfNeeded(); renderCal(); }
+  if(p==="vision") renderVision();
 }
 var calInit = false;
 function initCalIfNeeded(){ if(!calInit){ initCal(); calInit = true; } }
