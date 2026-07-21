@@ -764,7 +764,7 @@ function addTodo(){
   var input = document.getElementById("todo-input");
   var text = input.value.trim();
   if(!text){ input.focus(); return; }
-  todos.push({ id: Date.now(), text: text, done: false, doneDate: null, created: todayStr() });
+  todos.unshift({ id: Date.now(), text: text, done: false, doneDate: null, created: todayStr() });
   saveTodos();
   input.value = "";
   renderTodo();
