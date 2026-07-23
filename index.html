@@ -960,7 +960,37 @@ function saveEditTask(){
 // ---------- 타이머 ----------
 var TIMER_CIRC = 452.4;
 var timerState = { id:null, total:600, left:600, endAt:null, running:false };
-var timerTick = null;
+var timerTick = null, timerTimeout = null;
+
+function requestNotifyPermission(){
+  try {
+    if("Notification" in window && Notification.permission === "default"){
+      Notification.requestPermission();
+    }
+  } catch(e){}
+}
+function notifyTimerDone(taskName){
+  try {
+    if(!("Notification" in window) || Notification.permission !== "granted") return;
+    var opts = {
+      body: taskName + " 완료! 스탬프가 찍혔어요",
+      icon: "icon-192.png",
+      badge: "icon-192.png",
+      vibrate: [300,150,300,150,300,150,600],
+      tag: "routine-timer",
+      renotify: true
+    };
+    if(navigator.serviceWorker && navigator.serviceWorker.ready){
+      navigator.serviceWorker.ready.then(function(reg){
+        reg.showNotification("⏱ 타이머 완료", opts);
+      }).catch(function(){
+        try { new Notification("⏱ 타이머 완료", opts); } catch(e){}
+      });
+    } else {
+      new Notification("⏱ 타이머 완료", opts);
+    }
+  } catch(e){}
+}
 
 function timerTask(){
   for(var i=0;i<tasks.length;i++) if(tasks[i].id === timerState.id) return tasks[i];
@@ -1054,6 +1084,11 @@ function startTimerTick(){
     if(timerRemaining() <= 0) finishTimer();
     else updateTimerUI();
   }, 500);
+  // 백업: 브라우저가 인터벌을 억제해도 정확한 시각에 한 번은 실행되도록
+  clearTimeout(timerTimeout);
+  timerTimeout = setTimeout(function(){
+    if(timerState.running && timerRemaining() <= 0) finishTimer();
+  }, Math.max(0, timerRemaining()*1000 + 300));
 }
 function startPauseTimer(){
   if(!timerTask()) return;
@@ -1062,15 +1097,17 @@ function startPauseTimer(){
     timerState.endAt = null;
     timerState.running = false;
     clearInterval(timerTick);
+    clearTimeout(timerTimeout);
     sSet("routine_timer","");
   } else {
     if(timerState.left <= 0) timerState.left = timerState.total;
     ensureAudio();
+    requestNotifyPermission();
     timerState.endAt = Date.now() + timerState.left*1000;
     timerState.running = true;
     var t = timerTask();
     t.timer = Math.round(timerState.total/60); saveTasks();
-    sSet("routine_timer", JSON.stringify({ id:timerState.id, total:timerState.total, endAt:timerState.endAt }));
+    sSet("routine_timer", JSON.stringify({ id:timerState.id, total:timerState.total, endAt:timerState.endAt, name: t.emoji+" "+t.name }));
     document.getElementById("timer-msg").style.display = "none";
     startTimerTick();
   }
@@ -1081,6 +1118,7 @@ function resetTimer(){
   timerState.endAt = null;
   timerState.running = false;
   clearInterval(timerTick);
+  clearTimeout(timerTimeout);
   sSet("routine_timer","");
   document.getElementById("timer-msg").style.display = "none";
   updateTimerUI();
@@ -1091,16 +1129,21 @@ function stampTask(id){
   if(!log[key][id]){ log[key][id] = true; saveLog(); }
   renderToday();
 }
-function finishTimer(){
+function finishTimer(finishedName){
+  var t = timerTask();
+  var name = finishedName || (t ? (t.emoji+" "+t.name) : "루틴");
   timerState.running = false;
   timerState.endAt = null;
   timerState.left = 0;
   clearInterval(timerTick);
+  clearTimeout(timerTimeout);
   sSet("routine_timer","");
   stampTask(timerState.id);
   if(navigator.vibrate) navigator.vibrate([300,150,300,150,300,150,600,300,300,150,300,150,600]);
   beep();
-  document.getElementById("timer-msg").style.display = "block";
+  notifyTimerDone(name);
+  var msg = document.getElementById("timer-msg");
+  if(msg) msg.style.display = "block";
   updateTimerUI();
 }
 function ensureAudio(){
@@ -1343,6 +1386,14 @@ initSortables();
     }
   } catch(e){}
 })();
+
+// 앱을 다시 열거나 화면을 켰을 때, 백그라운드에서 놓친 타이머 완료를 즉시 반영
+document.addEventListener("visibilitychange", function(){
+  if(document.visibilityState === "visible" && timerState.running && timerRemaining() <= 0){
+    finishTimer();
+  }
+});
+
 // 길게 누를 때 브라우저 기본 메뉴(텍스트 선택 등) 방지
 document.getElementById("task-list").addEventListener("contextmenu", function(e){ e.preventDefault(); });
 document.getElementById("todo-list").addEventListener("contextmenu", function(e){ e.preventDefault(); });

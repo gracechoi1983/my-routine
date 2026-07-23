@@ -1,4 +1,4 @@
-const CACHE = "routine-v15";
+const CACHE = "routine-v16";
 const FILES = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png"];
 const SORTABLE_CDN = "https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js";
 self.addEventListener("install", e => {
@@ -18,4 +18,13 @@ self.addEventListener("fetch", e => {
   if (e.request.url.includes("googleapis.com") || e.request.url.includes("accounts.google.com")) return;
   if (e.request.method !== "GET") return;
   e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+});
+self.addEventListener("notificationclick", e => {
+  e.notification.close();
+  e.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(list => {
+      for (const c of list) { if ("focus" in c) return c.focus(); }
+      if (self.clients.openWindow) return self.clients.openWindow("./");
+    })
+  );
 });
