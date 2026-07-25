@@ -200,6 +200,15 @@
   .vision-field-row { display:flex; gap:8px; margin-bottom:14px; }
   .vision-field-row input, .vision-field-row select { flex:1; min-width:0; padding:12px 10px; border:1.5px solid #EEDCC8; border-radius:12px; font-size:14px; font-family:inherit; background:#FFFBF6; color:#4A3B32; outline:none; }
   .vision-del-btn { width:100%; margin-top:10px; padding:12px; border:1.5px solid #FFCFC7; border-radius:12px; background:#FFF3F1; color:#C0392B; font-weight:700; font-size:14px; cursor:pointer; font-family:inherit; }
+
+  /* 공용 확인/입력 모달 (브라우저 기본 alert 대체) */
+  #modal-back { position:fixed; inset:0; background:rgba(74,59,50,.45); z-index:40; display:none; }
+  #modal-sheet { position:fixed; left:0; right:0; bottom:0; background:#FFF6EC; border-radius:24px 24px 0 0; padding:20px 20px calc(24px + env(safe-area-inset-bottom)); z-index:41; display:none; box-shadow:0 -6px 24px rgba(160,120,80,.25); }
+  #modal-msg { font-size:14px; color:#4A3B32; text-align:left; line-height:1.6; padding:0 0 16px; }
+  .modal-btns { display:flex; gap:8px; }
+  .modal-btn-cancel { flex:1; padding:13px 0; border:none; border-radius:12px; background:#FFF0E0; color:#4A3B32; font-weight:700; font-size:15px; cursor:pointer; font-family:inherit; }
+  .modal-btn-ok { flex:1; padding:13px 0; border:none; border-radius:12px; background:linear-gradient(90deg,#FFB25C,#FF8A5C); color:#fff; font-weight:800; font-size:15px; cursor:pointer; font-family:inherit; }
+  .modal-btn-ok.danger { background:#FF6B5C; }
 </style>
 </head>
 <body>
@@ -349,6 +358,21 @@
   <div id="timer-msg" class="hint" style="display:none">🎉 타이머 완료! 스탬프가 찍혔어요</div>
 </div>
 
+<!-- 공용 확인/입력 모달 -->
+<div id="modal-back" onclick="closeModal()"></div>
+<div id="modal-sheet">
+  <div class="sheet-head">
+    <b id="modal-title"></b>
+    <button onclick="closeModal()" aria-label="닫기">✕</button>
+  </div>
+  <p id="modal-msg" style="display:none"></p>
+  <input id="modal-input" type="text" class="sheet-input" style="display:none" maxlength="60">
+  <div class="modal-btns">
+    <button class="modal-btn-cancel" onclick="closeModal()">취소</button>
+    <button class="modal-btn-ok" id="modal-ok" onclick="modalConfirmed()">확인</button>
+  </div>
+</div>
+
 <nav>
   <button class="active" id="tab-today" onclick="showPage('today')"><span class="nicon">☀️</span>Routine</button>
   <button id="tab-todo" onclick="showPage('todo')"><span class="nicon">📝</span>To-do</button>
@@ -425,10 +449,16 @@ function renderToday(){
     delBtn.className = "swipe-del";
     delBtn.textContent = "삭제";
     delBtn.onclick = function(){
-      if(confirm('"'+t.name+'" 루틴을 삭제할까요?')){
-        tasks = tasks.filter(function(x){ return x.id !== t.id; });
-        saveTasks(); openSwipe = null; renderToday();
-      }
+      openModal({
+        title: "루틴 삭제",
+        message: '"'+t.name+'" 루틴을 삭제할까요?',
+        okLabel: "삭제",
+        okDanger: true,
+        onOk: function(){
+          tasks = tasks.filter(function(x){ return x.id !== t.id; });
+          saveTasks(); openSwipe = null; renderToday();
+        }
+      });
     };
     var el = document.createElement("div");
     el.className = "task"+(isDone?" done":"");
@@ -477,6 +507,48 @@ function toggle(id){
   renderToday();
 }
 function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+// ---------- 공용 확인/입력 모달 (브라우저 기본 confirm/prompt 대체) ----------
+var modalOkCb = null, modalCancelCb = null;
+function openModal(opts){
+  opts = opts || {};
+  document.getElementById("modal-title").textContent = opts.title || "";
+  var msgEl = document.getElementById("modal-msg");
+  if(opts.message){ msgEl.textContent = opts.message; msgEl.style.display = "block"; }
+  else { msgEl.style.display = "none"; }
+  var inp = document.getElementById("modal-input");
+  if(opts.hasInput){
+    inp.style.display = "block";
+    inp.value = opts.inputValue || "";
+    inp.placeholder = opts.inputPlaceholder || "";
+  } else {
+    inp.style.display = "none";
+  }
+  var ok = document.getElementById("modal-ok");
+  ok.textContent = opts.okLabel || "확인";
+  ok.className = "modal-btn-ok" + (opts.okDanger ? " danger" : "");
+  modalOkCb = opts.onOk || null;
+  modalCancelCb = opts.onCancel || null;
+  document.getElementById("modal-back").style.display = "block";
+  document.getElementById("modal-sheet").style.display = "block";
+  if(opts.hasInput) setTimeout(function(){ inp.focus(); inp.select(); }, 60);
+}
+function closeModal(){
+  document.getElementById("modal-back").style.display = "none";
+  document.getElementById("modal-sheet").style.display = "none";
+  var cancelCb = modalCancelCb;
+  modalOkCb = null; modalCancelCb = null;
+  if(cancelCb) cancelCb();
+}
+function modalConfirmed(){
+  var inp = document.getElementById("modal-input");
+  var val = (inp.style.display !== "none") ? inp.value.trim() : null;
+  var ok = modalOkCb;
+  modalOkCb = null; modalCancelCb = null;
+  document.getElementById("modal-back").style.display = "none";
+  document.getElementById("modal-sheet").style.display = "none";
+  if(ok) ok(val);
+}
 
 // ---------- 제스처: 왼쪽 스와이프 삭제 (순서 이동은 SortableJS가 담당) ----------
 var justDragged = false, openSwipe = null, sorting = false;
@@ -740,18 +812,32 @@ function renderTodo(){
     }
     txt.onclick = function(){
       if(justDragged) return;
-      var v = prompt("할일 수정", td.text);
-      if(v!==null && v.trim()){ td.text = v.trim(); saveTodos(); renderTodo(); }
+      openModal({
+        title: "할일 수정",
+        hasInput: true,
+        inputValue: td.text,
+        inputPlaceholder: "할일 입력",
+        okLabel: "저장",
+        onOk: function(v){
+          if(v){ td.text = v; saveTodos(); renderTodo(); }
+        }
+      });
     };
     var del = document.createElement("button");
     del.className = "del";
     del.textContent = "✕";
     del.onclick = function(){
       if(justDragged) return;
-      if(confirm('"'+td.text+'" 을(를) 삭제할까요?')){
-        todos = todos.filter(function(x){ return x !== td; });
-        saveTodos(); renderTodo();
-      }
+      openModal({
+        title: "할일 삭제",
+        message: '"'+td.text+'" 을(를) 삭제할까요?',
+        okLabel: "삭제",
+        okDanger: true,
+        onOk: function(){
+          todos = todos.filter(function(x){ return x !== td; });
+          saveTodos(); renderTodo();
+        }
+      });
     };
     var handle = document.createElement("span");
     handle.className = "drag-handle";
@@ -1000,23 +1086,31 @@ function fmtTime(s){ return String(Math.floor(s/60)).padStart(2,"0")+":"+String(
 function timerRemaining(){
   return timerState.endAt ? Math.max(0, Math.round((timerState.endAt - Date.now())/1000)) : timerState.left;
 }
+function switchTimerTo(id){
+  clearInterval(timerTick);
+  clearTimeout(timerTimeout);
+  timerState.id = id;
+  var t = timerTask();
+  var mins = (t && t.timer) || 10;
+  timerState.total = mins*60;
+  timerState.left = timerState.total;
+  timerState.endAt = null;
+  timerState.running = false;
+  sSet("routine_timer","");
+}
 function openTimer(id){
-  if(timerState.id !== id){
-    if(timerState.running){
-      if(!confirm("진행 중인 타이머를 중단하고 새로 시작할까요?")){
-        showTimerSheet(); return;
-      }
-      clearInterval(timerTick);
-    }
-    timerState.id = id;
-    var t = timerTask();
-    var mins = (t && t.timer) || 10;
-    timerState.total = mins*60;
-    timerState.left = timerState.total;
-    timerState.endAt = null;
-    timerState.running = false;
-    sSet("routine_timer","");
+  if(timerState.id !== id && timerState.running){
+    openModal({
+      title: "타이머 전환",
+      message: "진행 중인 타이머를 중단하고 새로 시작할까요?",
+      okLabel: "새로 시작",
+      okDanger: true,
+      onOk: function(){ switchTimerTo(id); showTimerSheet(); },
+      onCancel: function(){ showTimerSheet(); }
+    });
+    return;
   }
+  if(timerState.id !== id) switchTimerTo(id);
   showTimerSheet();
 }
 function showTimerSheet(){
@@ -1327,12 +1421,19 @@ function saveVisionItem(){
 }
 function deleteVisionItem(){
   if(!editingVisionId) return;
-  if(confirm("이 비전 항목을 삭제할까요?")){
-    visions = visions.filter(function(v){ return v.id !== editingVisionId; });
-    saveVisions();
-    closeVisionSheet();
-    renderVision();
-  }
+  var id = editingVisionId;
+  openModal({
+    title: "비전 삭제",
+    message: "이 비전 항목을 삭제할까요?",
+    okLabel: "삭제",
+    okDanger: true,
+    onOk: function(){
+      visions = visions.filter(function(v){ return v.id !== id; });
+      saveVisions();
+      closeVisionSheet();
+      renderVision();
+    }
+  });
 }
 
 // ---------- 탭 ----------
