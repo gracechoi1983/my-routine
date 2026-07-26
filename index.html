@@ -146,7 +146,7 @@
   /* 타이머 */
   .timer-chip { border:1px solid #FFB25C; background:#FFF0E0; color:#D97742; border-radius:10px; padding:5px 8px; font-size:12px; font-weight:700; cursor:pointer; flex-shrink:0; font-family:inherit; white-space:nowrap; }
   #sheet-back { position:fixed; inset:0; background:rgba(74,59,50,.4); z-index:30; display:none; }
-  #timer-sheet { position:fixed; left:0; right:0; bottom:0; background:#FFF6EC; border-radius:24px 24px 0 0; padding:18px 20px calc(24px + env(safe-area-inset-bottom)); z-index:31; display:none; box-shadow:0 -6px 24px rgba(160,120,80,.25); }
+  #timer-sheet { position:fixed; left:0; right:0; bottom:0; background:#FFF6EC; border-radius:24px 24px 0 0; padding:18px 20px calc(24px + env(safe-area-inset-bottom)); z-index:31; display:none; box-shadow:0 -6px 24px rgba(160,120,80,.25); transition:transform .15s ease; }
   .sheet-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
   .sheet-head b { font-size:16px; }
   .sheet-head button { background:#FFF0E0; border:none; border-radius:10px; width:34px; height:34px; font-size:15px; cursor:pointer; color:#4A3B32; }
@@ -162,7 +162,7 @@
 
   /* 루틴 설정 시트 (이름 + 요일) */
   #edit-back { position:fixed; inset:0; background:rgba(74,59,50,.4); z-index:30; display:none; }
-  #edit-sheet { position:fixed; left:0; right:0; bottom:0; background:#FFF6EC; border-radius:24px 24px 0 0; padding:18px 20px calc(24px + env(safe-area-inset-bottom)); z-index:31; display:none; box-shadow:0 -6px 24px rgba(160,120,80,.25); }
+  #edit-sheet { position:fixed; left:0; right:0; bottom:0; background:#FFF6EC; border-radius:24px 24px 0 0; padding:18px 20px calc(24px + env(safe-area-inset-bottom)); z-index:31; display:none; box-shadow:0 -6px 24px rgba(160,120,80,.25); transition:transform .15s ease; }
   .sheet-input { width:100%; padding:12px 14px; border:1.5px solid #EEDCC8; border-radius:12px; font-size:15px; font-family:inherit; background:#FFFBF6; color:#4A3B32; outline:none; margin-bottom:12px; }
   .sheet-label { font-size:13px; font-weight:700; color:#8A6F58; margin-bottom:6px; }
   .day-presets { display:flex; gap:6px; margin-bottom:8px; }
@@ -197,14 +197,14 @@
 
   /* Vision 편집 시트 */
   #vision-back { position:fixed; inset:0; background:rgba(74,59,50,.4); z-index:30; display:none; }
-  #vision-sheet { position:fixed; left:0; right:0; bottom:0; background:#FFF6EC; border-radius:24px 24px 0 0; padding:18px 20px calc(24px + env(safe-area-inset-bottom)); z-index:31; display:none; max-height:80vh; overflow:auto; box-shadow:0 -6px 24px rgba(160,120,80,.25); }
+  #vision-sheet { position:fixed; left:0; right:0; bottom:0; background:#FFF6EC; border-radius:24px 24px 0 0; padding:18px 20px calc(24px + env(safe-area-inset-bottom)); z-index:31; display:none; max-height:80vh; overflow:auto; box-shadow:0 -6px 24px rgba(160,120,80,.25); transition:transform .15s ease; }
   .vision-field-row { display:flex; gap:8px; margin-bottom:14px; }
   .vision-field-row input, .vision-field-row select { flex:1; min-width:0; padding:12px 10px; border:1.5px solid #EEDCC8; border-radius:12px; font-size:14px; font-family:inherit; background:#FFFBF6; color:#4A3B32; outline:none; }
   .vision-del-btn { width:100%; margin-top:10px; padding:12px; border:1.5px solid #FFCFC7; border-radius:12px; background:#FFF3F1; color:#C0392B; font-weight:700; font-size:14px; cursor:pointer; font-family:inherit; }
 
   /* 공용 확인/입력 모달 (브라우저 기본 alert 대체) */
   #modal-back { position:fixed; inset:0; background:rgba(74,59,50,.45); z-index:40; display:none; }
-  #modal-sheet { position:fixed; left:0; right:0; bottom:0; background:#FFF6EC; border-radius:24px 24px 0 0; padding:20px 20px calc(24px + env(safe-area-inset-bottom)); z-index:41; display:none; box-shadow:0 -6px 24px rgba(160,120,80,.25); }
+  #modal-sheet { position:fixed; left:0; right:0; bottom:0; background:#FFF6EC; border-radius:24px 24px 0 0; padding:20px 20px calc(24px + env(safe-area-inset-bottom)); z-index:41; display:none; box-shadow:0 -6px 24px rgba(160,120,80,.25); transition:transform .15s ease; }
   #modal-msg { font-size:14px; color:#4A3B32; text-align:left; line-height:1.6; padding:0 0 16px; }
   .modal-btns { display:flex; gap:8px; }
   .modal-btn-cancel { flex:1; padding:13px 0; border:none; border-radius:12px; background:#FFF0E0; color:#4A3B32; font-weight:700; font-size:15px; cursor:pointer; font-family:inherit; }
@@ -219,7 +219,7 @@
   <header>
     <h1>오늘의 루틴 🌞</h1>
     <div class="date" id="today-date"></div>
-    <div class="version-tag">앱 버전 v18</div>
+    <div class="version-tag">앱 버전 v19</div>
   </header>
   <div class="progress-wrap">
     <div class="progress-label"><span id="prog-text">0 / 0 완료</span><span class="pct" id="prog-pct">0%</span></div>
@@ -551,6 +551,30 @@ function modalConfirmed(){
   document.getElementById("modal-sheet").style.display = "none";
   if(ok) ok(val);
 }
+
+// ---------- 키보드가 하단 시트 버튼을 가리지 않도록 위로 밀어올리기 ----------
+var KEYBOARD_SHEETS = ["modal-sheet","edit-sheet","vision-sheet","timer-sheet"];
+function adjustSheetsForKeyboard(){
+  if(!window.visualViewport) return;
+  var kb = Math.max(0, window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop);
+  KEYBOARD_SHEETS.forEach(function(id){
+    var el = document.getElementById(id);
+    if(!el) return;
+    el.style.transform = kb > 60 ? "translateY(-" + kb + "px)" : "";
+  });
+}
+if(window.visualViewport){
+  window.visualViewport.addEventListener("resize", adjustSheetsForKeyboard);
+  window.visualViewport.addEventListener("scroll", adjustSheetsForKeyboard);
+}
+document.addEventListener("DOMContentLoaded", function(){
+  var mi = document.getElementById("modal-input");
+  if(mi) mi.addEventListener("keydown", function(e){ if(e.key==="Enter") modalConfirmed(); });
+  var en = document.getElementById("edit-name");
+  if(en) en.addEventListener("keydown", function(e){ if(e.key==="Enter") saveEditTask(); });
+  var vt = document.getElementById("vision-text");
+  if(vt) vt.addEventListener("keydown", function(e){ if(e.key==="Enter") saveVisionItem(); });
+});
 
 // ---------- 제스처: 왼쪽 스와이프 삭제 (순서 이동은 SortableJS가 담당) ----------
 var justDragged = false, openSwipe = null, sorting = false;
