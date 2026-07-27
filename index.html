@@ -116,6 +116,21 @@
   .gevent:last-child { border-bottom:none; }
   .gevent .gtime { color:#FF8A5C; font-weight:800; font-size:12px; min-width:74px; }
   .gcal-cal { font-size:11px; color:#B8A28C; }
+
+  /* 식단표 */
+  .meal-box { background:#FFFFFF; border-radius:16px; padding:2px 14px; margin:0 20px; }
+  .meal-row { display:flex; align-items:center; gap:10px; padding:11px 0; border-bottom:1px solid #FFF3E6; white-space:nowrap; }
+  .meal-row:last-child { border-bottom:none; }
+  .meal-label { font-size:13px; font-weight:700; color:#D97742; flex-shrink:0; white-space:nowrap; }
+  .meal-row input { flex:1; min-width:0; border:none; background:none; font-size:14px; font-family:inherit; color:#4A3B32; outline:none; }
+
+  /* 쇼핑 리스트 (작은 원형 체크) */
+  .shop-item { display:flex; align-items:center; gap:10px; background:#FFFFFF; border-radius:14px; padding:11px 12px; margin-bottom:8px; box-shadow:0 1px 4px rgba(160,120,80,.07); }
+  .shop-chk { width:20px; height:20px; min-width:20px; border-radius:50%; border:2px solid #E8D5C0; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:11px; cursor:pointer; background:none; padding:0; line-height:1; }
+  .shop-item.done .shop-chk { border-color:#FFB25C; background:#FF8A5C; color:#fff; }
+  .shop-item .txt { flex:1; font-size:14px; font-weight:600; cursor:pointer; }
+  .shop-item.done .txt { color:#B89B82; text-decoration:line-through; text-decoration-color:#FFB25C; }
+  .shop-item button.del { background:#FFE3E0; border:none; border-radius:8px; width:28px; height:28px; font-size:12px; cursor:pointer; color:#4A3B32; flex-shrink:0; }
   .todo-add { display:flex; gap:8px; margin:6px 20px 4px; }
   .todo-add input { flex:1; min-width:0; padding:12px 14px; border:1.5px solid #EEDCC8; border-radius:14px; font-size:15px; font-family:inherit; background:#FFFBF6; color:#4A3B32; outline:none; }
   .todo-add input:focus { border-color:#FFB25C; }
@@ -219,7 +234,7 @@
   <header>
     <h1>오늘의 루틴 🌞</h1>
     <div class="date" id="today-date"></div>
-    <div class="version-tag">앱 버전 v19</div>
+    <div class="version-tag">앱 버전 v20</div>
   </header>
   <div class="progress-wrap">
     <div class="progress-label"><span id="prog-text">0 / 0 완료</span><span class="pct" id="prog-pct">0%</span></div>
@@ -257,6 +272,31 @@
   </div>
   <div class="list" id="todo-list"></div>
   <div class="hint">완료 못한 할일은 자동으로 다음날로 넘어가요.</div>
+
+  <div class="section-title">🍱 오늘의 식단</div>
+  <div class="meal-box">
+    <div class="meal-row">
+      <span class="meal-label">🌅 아침</span>
+      <input id="meal-breakfast" type="text" placeholder="메뉴를 입력하세요" maxlength="60">
+    </div>
+    <div class="meal-row">
+      <span class="meal-label">☀️ 점심</span>
+      <input id="meal-lunch" type="text" placeholder="메뉴를 입력하세요" maxlength="60">
+    </div>
+    <div class="meal-row">
+      <span class="meal-label">🌙 저녁</span>
+      <input id="meal-dinner" type="text" placeholder="메뉴를 입력하세요" maxlength="60">
+    </div>
+  </div>
+  <div class="hint">매일 자정에 새로 비워져요.</div>
+
+  <div class="section-title">🛒 쇼핑 리스트</div>
+  <div class="todo-add">
+    <input id="shop-input" type="text" placeholder="살 물건 입력" maxlength="40">
+    <button onclick="addShopItem()">+</button>
+  </div>
+  <div class="list" id="shop-list"></div>
+  <div class="hint">체크한 항목은 계속 남아있어요. ✕로 지워주세요.</div>
 </div>
 
 <!-- 기록 -->
@@ -886,7 +926,88 @@ document.addEventListener("DOMContentLoaded", function(){
   if(inp) inp.addEventListener("keydown", function(e){ if(e.key==="Enter") addTodo(); });
   var rinp = document.getElementById("routine-input");
   if(rinp) rinp.addEventListener("keydown", function(e){ if(e.key==="Enter") addRoutineInline(); });
+  var sinp = document.getElementById("shop-input");
+  if(sinp) sinp.addEventListener("keydown", function(e){ if(e.key==="Enter") addShopItem(); });
 });
+
+// ---------- 오늘의 식단 (매일 자정 초기화) ----------
+function loadMeals(){
+  var raw = sGet("routine_meals");
+  if(raw){ try { return JSON.parse(raw); } catch(e){} }
+  return { date:"", breakfast:"", lunch:"", dinner:"" };
+}
+function saveMeals(){ sSet("routine_meals", JSON.stringify(meals)); }
+var meals = loadMeals();
+function renderMeals(){
+  var t = todayStr();
+  if(meals.date !== t){ meals = { date:t, breakfast:"", lunch:"", dinner:"" }; saveMeals(); }
+  document.getElementById("meal-breakfast").value = meals.breakfast || "";
+  document.getElementById("meal-lunch").value = meals.lunch || "";
+  document.getElementById("meal-dinner").value = meals.dinner || "";
+}
+function wireMealInputs(){
+  [["meal-breakfast","breakfast"],["meal-lunch","lunch"],["meal-dinner","dinner"]].forEach(function(pair){
+    var el = document.getElementById(pair[0]);
+    if(!el) return;
+    el.addEventListener("input", function(){ meals[pair[1]] = el.value; saveMeals(); });
+  });
+}
+
+// ---------- 쇼핑 리스트 (완료해도 목록에 남고, ✕로만 삭제) ----------
+function loadShopItems(){
+  var raw = sGet("routine_shop");
+  if(raw){ try { return JSON.parse(raw); } catch(e){} }
+  return [];
+}
+function saveShopItems(){ sSet("routine_shop", JSON.stringify(shopItems)); }
+var shopItems = loadShopItems();
+function renderShop(){
+  var box = document.getElementById("shop-list");
+  box.innerHTML = "";
+  if(shopItems.length === 0){
+    box.innerHTML = '<div class="hint" style="padding-top:4px">살 물건을 입력해보세요!</div>';
+    return;
+  }
+  shopItems.forEach(function(it){
+    var el = document.createElement("div");
+    el.className = "shop-item" + (it.done ? " done" : "");
+    el.dataset.id = it.id;
+    var chk = document.createElement("button");
+    chk.className = "shop-chk";
+    chk.innerHTML = it.done ? "✓" : "";
+    chk.onclick = function(){ it.done = !it.done; saveShopItems(); renderShop(); };
+    var txt = document.createElement("span");
+    txt.className = "txt";
+    txt.textContent = it.text;
+    txt.onclick = function(){ it.done = !it.done; saveShopItems(); renderShop(); };
+    var del = document.createElement("button");
+    del.className = "del";
+    del.textContent = "✕";
+    del.onclick = function(){
+      openModal({
+        title: "쇼핑 항목 삭제",
+        message: '"'+it.text+'" 을(를) 삭제할까요?',
+        okLabel: "삭제",
+        okDanger: true,
+        onOk: function(){
+          shopItems = shopItems.filter(function(x){ return x.id !== it.id; });
+          saveShopItems(); renderShop();
+        }
+      });
+    };
+    el.appendChild(chk); el.appendChild(txt); el.appendChild(del);
+    box.appendChild(el);
+  });
+}
+function addShopItem(){
+  var input = document.getElementById("shop-input");
+  var text = input.value.trim();
+  if(!text){ input.focus(); return; }
+  shopItems.push({ id: Date.now(), text: text, done: false });
+  saveShopItems();
+  input.value = "";
+  renderShop();
+}
 
 // ---------- 구글캘린더 ----------
 var GOOGLE_CLIENT_ID = "843415680672-nutva8fu3letg1pdu1j75d9agakm779v.apps.googleusercontent.com";
@@ -1471,6 +1592,8 @@ function showPage(p){
   if(p==="today") renderToday();
   if(p==="todo"){
     renderTodo();
+    renderMeals();
+    renderShop();
     if(!gcalToken){
       var saved = getSavedGcalToken();
       if(saved){ gcalToken = saved; fetchGcalEvents(); }
@@ -1486,11 +1609,12 @@ function initCalIfNeeded(){ if(!calInit){ initCal(); calInit = true; } }
 // 자정 넘어가면 자동 갱신
 var lastDay = todayStr();
 setInterval(function(){
-  if(todayStr()!==lastDay){ lastDay = todayStr(); renderToday(); renderTodo(); }
+  if(todayStr()!==lastDay){ lastDay = todayStr(); renderToday(); renderTodo(); renderMeals(); }
 }, 30000);
 
 renderToday();
 initSortables();
+wireMealInputs();
 
 // 앱 재시작 시 진행 중이던 타이머 복원
 (function(){
