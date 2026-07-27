@@ -234,7 +234,7 @@
   <header>
     <h1>오늘의 루틴 🌞</h1>
     <div class="date" id="today-date"></div>
-    <div class="version-tag">앱 버전 v20</div>
+    <div class="version-tag">앱 버전 v21</div>
   </header>
   <div class="progress-wrap">
     <div class="progress-label"><span id="prog-text">0 / 0 완료</span><span class="pct" id="prog-pct">0%</span></div>
@@ -288,7 +288,7 @@
       <input id="meal-dinner" type="text" placeholder="메뉴를 입력하세요" maxlength="60">
     </div>
   </div>
-  <div class="hint">매일 자정에 새로 비워져요.</div>
+  <div class="hint">탭해서 언제든 수정할 수 있어요.</div>
 
   <div class="section-title">🛒 쇼핑 리스트</div>
   <div class="todo-add">
@@ -934,13 +934,11 @@ document.addEventListener("DOMContentLoaded", function(){
 function loadMeals(){
   var raw = sGet("routine_meals");
   if(raw){ try { return JSON.parse(raw); } catch(e){} }
-  return { date:"", breakfast:"", lunch:"", dinner:"" };
+  return { breakfast:"", lunch:"", dinner:"" };
 }
 function saveMeals(){ sSet("routine_meals", JSON.stringify(meals)); }
 var meals = loadMeals();
 function renderMeals(){
-  var t = todayStr();
-  if(meals.date !== t){ meals = { date:t, breakfast:"", lunch:"", dinner:"" }; saveMeals(); }
   document.getElementById("meal-breakfast").value = meals.breakfast || "";
   document.getElementById("meal-lunch").value = meals.lunch || "";
   document.getElementById("meal-dinner").value = meals.dinner || "";
@@ -979,7 +977,18 @@ function renderShop(){
     var txt = document.createElement("span");
     txt.className = "txt";
     txt.textContent = it.text;
-    txt.onclick = function(){ it.done = !it.done; saveShopItems(); renderShop(); };
+    txt.onclick = function(){
+      openModal({
+        title: "쇼핑 항목 수정",
+        hasInput: true,
+        inputValue: it.text,
+        inputPlaceholder: "살 물건 입력",
+        okLabel: "저장",
+        onOk: function(v){
+          if(v){ it.text = v; saveShopItems(); renderShop(); }
+        }
+      });
+    };
     var del = document.createElement("button");
     del.className = "del";
     del.textContent = "✕";
