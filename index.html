@@ -84,11 +84,34 @@
   .cell.empty { background:transparent; box-shadow:none; cursor:default; }
   .cell .mini { font-size:10px; margin-top:1px; }
   .cell.today { outline:2px solid #FF8A5C; }
-  .cell.sel { background:#FF8A5C; color:#fff; }
+  .cell.sel { box-shadow:inset 0 0 0 2px #4A3B32; }
   .day-detail { margin:10px 20px; background:#FFFFFF; border-radius:16px; padding:14px 16px; box-shadow:0 2px 6px rgba(160,120,80,.07); }
   .day-detail h3 { font-size:14px; margin-bottom:8px; }
   .day-detail div { font-size:14px; padding:3px 0; }
   .day-detail .no { color:#C9B49E; }
+
+  /* 기록 대시보드 */
+  .dash-card { background:#FFFFFF; border-radius:16px; padding:14px 16px; margin:0 20px 14px; box-shadow:0 2px 6px rgba(160,120,80,.07); }
+  .dash-title { font-size:13px; font-weight:800; color:#8A6F58; margin-bottom:10px; }
+  .dash-row { display:flex; align-items:flex-end; gap:18px; }
+  .dash-num { font-size:26px; font-weight:800; color:#FF8A5C; line-height:1; }
+  .dash-sub { font-size:12px; color:#A08874; margin-top:4px; }
+  .dash-delta { font-size:13px; font-weight:800; }
+  .dash-delta.up { color:#FF8A5C; }
+  .dash-delta.down { color:#FF6B5C; }
+  .dash-delta.flat { color:#B8A28C; }
+  .health-item { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #FFF3E6; }
+  .health-item:last-child { border-bottom:none; }
+  .health-icon { font-size:17px; width:24px; text-align:center; flex-shrink:0; }
+  .health-name { flex:1; font-size:14px; font-weight:600; color:#4A3B32; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .health-bar-wrap { width:56px; height:7px; background:#FFE8D6; border-radius:6px; overflow:hidden; flex-shrink:0; }
+  .health-bar { height:100%; border-radius:6px; }
+  .health-pct { font-size:12px; font-weight:800; width:32px; text-align:right; flex-shrink:0; color:#8A6F58; }
+  .weekday-chart { display:flex; align-items:flex-end; gap:6px; height:80px; padding-top:6px; }
+  .weekday-bar-wrap { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; }
+  .weekday-bar { width:100%; border-radius:6px 6px 0 0; background:#FFB25C; min-height:2px; }
+  .weekday-label { font-size:11px; color:#8A6F58; margin-top:5px; font-weight:700; }
+  .weekday-note { font-size:12px; color:#D97742; margin-top:10px; font-weight:600; }
 
   /* edit */
   .edit-list { padding:12px 20px 0; }
@@ -232,7 +255,7 @@
 <!-- 오늘 -->
 <div class="page show" id="page-today">
   <header>
-    <h1>오늘의 루틴 🌞<span class="version-tag">v.22</span></h1>
+    <h1>오늘의 루틴 🌞<span class="version-tag">v.23</span></h1>
     <div class="date" id="today-date"></div>
   </header>
   <div class="progress-wrap">
@@ -300,7 +323,37 @@
 
 <!-- 기록 -->
 <div class="page" id="page-history">
-  <header><h1>지난 기록 📅</h1></header>
+  <header><h1>기록 📊</h1></header>
+
+  <div class="dash-card">
+    <div class="dash-title">☀️ 오늘 요약</div>
+    <div class="dash-row">
+      <div><div class="dash-num" id="dash-today-pct">0%</div><div class="dash-sub" id="dash-today-sub">0 / 0 완료</div></div>
+      <div><div class="dash-num" id="dash-today-left" style="font-size:20px">0개</div><div class="dash-sub">남은 루틴</div></div>
+      <div><div class="dash-num" id="dash-streak" style="font-size:20px">0일</div><div class="dash-sub">🔥 연속 올클리어</div></div>
+    </div>
+  </div>
+
+  <div class="dash-card">
+    <div class="dash-title">📈 이번 주 성과</div>
+    <div class="dash-row">
+      <div><div class="dash-num" id="dash-week-pct">0%</div><div class="dash-sub">최근 7일 평균 달성률</div></div>
+      <div><div class="dash-delta" id="dash-week-delta">-</div><div class="dash-sub">지난주 대비</div></div>
+    </div>
+  </div>
+
+  <div class="dash-card">
+    <div class="dash-title">💪 루틴 건강도 (최근 7일)</div>
+    <div id="dash-health"></div>
+  </div>
+
+  <div class="dash-card">
+    <div class="dash-title">📅 요일별 분석 (최근 4주)</div>
+    <div class="weekday-chart" id="dash-weekday"></div>
+    <div class="weekday-note" id="dash-weekday-note"></div>
+  </div>
+
+  <div class="dash-title" style="padding:0 20px 8px">🗓️ 히트맵 달력</div>
   <div class="cal-head">
     <button onclick="moveMonth(-1)">◀</button>
     <b id="cal-title"></b>
@@ -756,6 +809,25 @@ function moveMonth(n){
   selDay = null;
   renderCal();
 }
+function tasksForDow(dow){
+  return tasks.filter(function(t){ return !t.days || t.days.indexOf(dow) !== -1; });
+}
+function dayCompletion(dateObj){
+  var key = dstr(dateObj);
+  var dayTasks = tasksForDow(dateObj.getDay());
+  var total = dayTasks.length;
+  if(total === 0) return { total:0, done:0, pct:null };
+  var doneSet = log[key] || {};
+  var done = dayTasks.filter(function(t){ return !!doneSet[t.id]; }).length;
+  return { total:total, done:done, pct: Math.round(done/total*100) };
+}
+function heatColor(pct){
+  var c1 = [255,246,236], c2 = [255,138,92];
+  var r = Math.round(c1[0] + (c2[0]-c1[0]) * pct/100);
+  var g = Math.round(c1[1] + (c2[1]-c1[1]) * pct/100);
+  var b = Math.round(c1[2] + (c2[2]-c1[2]) * pct/100);
+  return "rgb("+r+","+g+","+b+")";
+}
 function renderCal(){
   document.getElementById("cal-title").textContent = calY+"년 "+(calM+1)+"월";
   var cal = document.getElementById("cal");
@@ -769,17 +841,152 @@ function renderCal(){
   for(var i=0;i<first;i++){ var e=document.createElement("div"); e.className="cell empty"; cal.appendChild(e); }
   for(var day=1; day<=days; day++){
     (function(day){
-      var key = dstr(new Date(calY, calM, day));
-      var done = log[key] ? Object.keys(log[key]).length : 0;
+      var dObj = new Date(calY, calM, day);
+      var key = dstr(dObj);
+      var isFuture = key > tStr;
       var cell = document.createElement("div");
       cell.className = "cell"+(key===tStr?" today":"")+(selDay===key?" sel":"");
-      var dw = new Date(calY, calM, day).getDay();
-      var totalForDay = tasks.filter(function(t){ return !t.days || t.days.indexOf(dw) !== -1; }).length;
-      var mini = done>0 ? '<span class="mini">'+(done>=totalForDay&&totalForDay>0?"🌟":"✅"+done)+'</span>' : '<span class="mini">&nbsp;</span>';
-      cell.innerHTML = day + mini;
+      var mini = "&nbsp;";
+      if(isFuture){
+        cell.style.background = "#FFFFFF";
+        cell.style.color = "#4A3B32";
+      } else {
+        var c = dayCompletion(dObj);
+        if(c.pct === null){
+          cell.style.background = "#FFFFFF";
+          cell.style.color = "#4A3B32";
+        } else {
+          cell.style.background = heatColor(c.pct);
+          cell.style.color = c.pct >= 55 ? "#FFFFFF" : "#4A3B32";
+          if(c.pct === 100) mini = "🌟";
+        }
+      }
+      cell.innerHTML = day + '<span class="mini">'+mini+'</span>';
       cell.onclick = function(){ selDay = key; renderCal(); renderDayDetail(key); };
       cal.appendChild(cell);
     })(day);
+  }
+}
+
+// ---------- 기록 대시보드 ----------
+function calcOverallStreak(){
+  var streak = 0, tStr = todayStr();
+  for(var i=0, guard=0; guard<3660; guard++){
+    var d = new Date();
+    d.setDate(d.getDate() - i);
+    var c = dayCompletion(d);
+    var key = dstr(d);
+    if(c.total === 0){ i++; continue; }
+    if(c.done === c.total){ streak++; i++; continue; }
+    if(key === tStr){ i++; continue; }
+    break;
+  }
+  return streak;
+}
+function periodAvgPct(endOffsetDaysAgo, numDays){
+  var total = 0, count = 0;
+  for(var i=0;i<numDays;i++){
+    var d = new Date();
+    d.setDate(d.getDate() - (endOffsetDaysAgo+i));
+    var c = dayCompletion(d);
+    if(c.total === 0) continue;
+    total += c.done / c.total; count++;
+  }
+  return count ? Math.round(total/count*100) : null;
+}
+function taskRatePct(task, numDays){
+  var total = 0, done = 0;
+  for(var i=0;i<numDays;i++){
+    var d = new Date();
+    d.setDate(d.getDate() - i);
+    if(task.days && task.days.indexOf(d.getDay()) === -1) continue;
+    total++;
+    var doneSet = log[dstr(d)] || {};
+    if(doneSet[task.id]) done++;
+  }
+  return total ? Math.round(done/total*100) : null;
+}
+function weekdayPattern(){
+  var sums = [0,0,0,0,0,0,0], counts = [0,0,0,0,0,0,0];
+  for(var i=0;i<28;i++){
+    var d = new Date();
+    d.setDate(d.getDate() - i);
+    var dow = d.getDay();
+    var c = dayCompletion(d);
+    if(c.total === 0) continue;
+    sums[dow] += c.done / c.total; counts[dow]++;
+  }
+  var W = ["일","월","화","수","목","금","토"];
+  var out = [];
+  for(var k=0;k<7;k++) out.push({ label:W[k], pct: counts[k] ? Math.round(sums[k]/counts[k]*100) : null });
+  return out;
+}
+function renderDashboard(){
+  var t = todayStr();
+  var todaysTasks = tasksForDow(new Date().getDay());
+  var doneSet = log[t] || {};
+  var todayDone = todaysTasks.filter(function(x){ return !!doneSet[x.id]; }).length;
+  var todayTotal = todaysTasks.length;
+  var todayPct = todayTotal ? Math.round(todayDone/todayTotal*100) : 0;
+  document.getElementById("dash-today-pct").textContent = todayPct + "%";
+  document.getElementById("dash-today-sub").textContent = todayDone + " / " + todayTotal + " 완료";
+  document.getElementById("dash-today-left").textContent = Math.max(0, todayTotal-todayDone) + "개";
+  document.getElementById("dash-streak").textContent = calcOverallStreak() + "일";
+
+  var thisWeek = periodAvgPct(0,7);
+  var lastWeek = periodAvgPct(7,7);
+  document.getElementById("dash-week-pct").textContent = (thisWeek===null?0:thisWeek) + "%";
+  var deltaEl = document.getElementById("dash-week-delta");
+  if(thisWeek===null || lastWeek===null){
+    deltaEl.textContent = "-"; deltaEl.className = "dash-delta flat";
+  } else {
+    var delta = thisWeek - lastWeek;
+    deltaEl.textContent = (delta>0?"▲ +":delta<0?"▼ ":"− ") + Math.abs(delta) + "%p";
+    deltaEl.className = "dash-delta " + (delta>0?"up":delta<0?"down":"flat");
+  }
+
+  var healthBox = document.getElementById("dash-health");
+  healthBox.innerHTML = "";
+  var rated = tasks.map(function(t){ return { t:t, pct: taskRatePct(t,7) }; }).filter(function(r){ return r.pct!==null; });
+  rated.sort(function(a,b){ return b.pct - a.pct; });
+  if(rated.length===0){
+    healthBox.innerHTML = '<div class="hint" style="padding:4px 0 0">아직 데이터가 부족해요</div>';
+  } else {
+    rated.forEach(function(r){
+      var badge = r.pct>=80 ? "✅" : (r.pct<40 ? "⚠️" : "");
+      var barColor = r.pct>=80 ? "#FF8A5C" : (r.pct<40 ? "#FF6B5C" : "#FFB25C");
+      var row = document.createElement("div");
+      row.className = "health-item";
+      row.innerHTML =
+        '<span class="health-icon">'+r.t.emoji+'</span>'
+        +'<span class="health-name">'+esc(r.t.name)+' '+badge+'</span>'
+        +'<span class="health-bar-wrap"><span class="health-bar" style="width:'+r.pct+'%;background:'+barColor+'"></span></span>'
+        +'<span class="health-pct">'+r.pct+'%</span>';
+      healthBox.appendChild(row);
+    });
+  }
+
+  var pattern = weekdayPattern();
+  var wd = document.getElementById("dash-weekday");
+  wd.innerHTML = "";
+  var maxPct = Math.max(1, Math.max.apply(null, pattern.map(function(p){ return p.pct||0; })));
+  pattern.forEach(function(p){
+    var wrap = document.createElement("div");
+    wrap.className = "weekday-bar-wrap";
+    var h = p.pct===null ? 2 : Math.max(4, Math.round(p.pct/maxPct*72));
+    wrap.innerHTML =
+      '<span class="weekday-pct" style="font-size:10px;color:#B8926F">'+(p.pct===null?"":p.pct+"%")+'</span>'
+      +'<div class="weekday-bar" style="height:'+h+'px"></div>'
+      +'<span class="weekday-label">'+p.label+'</span>';
+    wd.appendChild(wrap);
+  });
+  var withData = pattern.filter(function(p){ return p.pct!==null; });
+  var noteEl = document.getElementById("dash-weekday-note");
+  if(withData.length < 3){
+    noteEl.textContent = "";
+  } else {
+    var min = withData.reduce(function(a,b){ return b.pct<a.pct?b:a; });
+    noteEl.textContent = min.label+"요일에 자주 놓치고 있어요";
   }
 }
 function renderDayDetail(key){
@@ -1608,7 +1815,7 @@ function showPage(p){
       else if(sGet("gcal_connected") && gcalReady()) connectGcal();
     }
   }
-  if(p==="history"){ initCalIfNeeded(); renderCal(); }
+  if(p==="history"){ initCalIfNeeded(); renderCal(); renderDashboard(); }
   if(p==="vision") renderVision();
 }
 var calInit = false;
