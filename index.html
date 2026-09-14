@@ -140,12 +140,13 @@
   .gevent .gtime { color:#FF8A5C; font-weight:800; font-size:12px; min-width:74px; }
   .gcal-cal { font-size:11px; color:#B8A28C; }
 
-  /* 식단표 */
-  .meal-box { background:#FFFFFF; border-radius:16px; padding:2px 14px; margin:0 20px; }
-  .meal-row { display:flex; align-items:center; gap:10px; padding:11px 0; border-bottom:1px solid #FFF3E6; white-space:nowrap; }
-  .meal-row:last-child { border-bottom:none; }
-  .meal-label { font-size:13px; font-weight:700; color:#D97742; flex-shrink:0; white-space:nowrap; }
-  .meal-row input { flex:1; min-width:0; border:none; background:none; font-size:14px; font-family:inherit; color:#4A3B32; outline:none; }
+  /* 식단표 (자유 메뉴 목록) */
+  .meal-group { margin:0 20px 18px; }
+  .meal-group-title { font-size:13px; font-weight:800; color:#D97742; margin-bottom:8px; }
+  .meal-chip-wrap { display:flex; flex-wrap:wrap; gap:8px; }
+  .meal-chip { display:flex; align-items:center; gap:6px; background:#FFFFFF; border-radius:20px; padding:8px 8px 8px 14px; font-size:13px; font-weight:600; color:#4A3B32; box-shadow:0 1px 4px rgba(160,120,80,.07); cursor:pointer; }
+  .meal-chip .del { background:#FFE3E0; border:none; border-radius:50%; width:20px; height:20px; font-size:10px; cursor:pointer; color:#4A3B32; display:flex; align-items:center; justify-content:center; padding:0; flex-shrink:0; }
+  .meal-chip-empty { font-size:12px; color:#C9B49E; }
 
   /* 쇼핑 리스트 (작은 원형 체크) */
   .shop-item { display:flex; align-items:center; gap:10px; background:#FFFFFF; border-radius:14px; padding:11px 12px; margin-bottom:8px; box-shadow:0 1px 4px rgba(160,120,80,.07); }
@@ -255,7 +256,7 @@
 <!-- 오늘 -->
 <div class="page show" id="page-today">
   <header>
-    <h1>오늘의 루틴 🌞<span class="version-tag">v.23</span></h1>
+    <h1>오늘의 루틴 🌞<span class="version-tag">v.24</span></h1>
     <div class="date" id="today-date"></div>
   </header>
   <div class="progress-wrap">
@@ -295,22 +296,32 @@
   <div class="list" id="todo-list"></div>
   <div class="hint">완료 못한 할일은 자동으로 다음날로 넘어가요.</div>
 
-  <div class="section-title">🍱 오늘의 식단</div>
-  <div class="meal-box">
-    <div class="meal-row">
-      <span class="meal-label">🌅 아침</span>
-      <input id="meal-breakfast" type="text" placeholder="메뉴를 입력하세요" maxlength="60">
+  <div class="section-title">🍱 나의 식단표</div>
+  <div class="meal-group">
+    <div class="meal-group-title">🌅 아침 메뉴</div>
+    <div class="todo-add" style="margin:0 0 10px">
+      <input id="mealbank-input-breakfast" type="text" placeholder="메뉴 입력 (예: 간장계란밥)" maxlength="30">
+      <button onclick="addMealBankItem('breakfast')">+</button>
     </div>
-    <div class="meal-row">
-      <span class="meal-label">☀️ 점심</span>
-      <input id="meal-lunch" type="text" placeholder="메뉴를 입력하세요" maxlength="60">
-    </div>
-    <div class="meal-row">
-      <span class="meal-label">🌙 저녁</span>
-      <input id="meal-dinner" type="text" placeholder="메뉴를 입력하세요" maxlength="60">
-    </div>
+    <div class="meal-chip-wrap" id="mealbank-list-breakfast"></div>
   </div>
-  <div class="hint">탭해서 언제든 수정할 수 있어요.</div>
+  <div class="meal-group">
+    <div class="meal-group-title">☀️ 점심 메뉴</div>
+    <div class="todo-add" style="margin:0 0 10px">
+      <input id="mealbank-input-lunch" type="text" placeholder="메뉴 입력 (예: 참치마요삼각김밥)" maxlength="30">
+      <button onclick="addMealBankItem('lunch')">+</button>
+    </div>
+    <div class="meal-chip-wrap" id="mealbank-list-lunch"></div>
+  </div>
+  <div class="meal-group">
+    <div class="meal-group-title">🌙 저녁 메뉴</div>
+    <div class="todo-add" style="margin:0 0 10px">
+      <input id="mealbank-input-dinner" type="text" placeholder="메뉴 입력" maxlength="30">
+      <button onclick="addMealBankItem('dinner')">+</button>
+    </div>
+    <div class="meal-chip-wrap" id="mealbank-list-dinner"></div>
+  </div>
+  <div class="hint">메뉴를 탭하면 수정, ✕를 누르면 삭제돼요.</div>
 
   <div class="section-title">🛒 쇼핑 리스트</div>
   <div class="todo-add">
@@ -1134,27 +1145,68 @@ document.addEventListener("DOMContentLoaded", function(){
   if(rinp) rinp.addEventListener("keydown", function(e){ if(e.key==="Enter") addRoutineInline(); });
   var sinp = document.getElementById("shop-input");
   if(sinp) sinp.addEventListener("keydown", function(e){ if(e.key==="Enter") addShopItem(); });
+  ["breakfast","lunch","dinner"].forEach(function(type){
+    var el = document.getElementById("mealbank-input-"+type);
+    if(el) el.addEventListener("keydown", function(e){ if(e.key==="Enter") addMealBankItem(type); });
+  });
 });
 
-// ---------- 오늘의 식단 (매일 자정 초기화) ----------
-function loadMeals(){
-  var raw = sGet("routine_meals");
+// ---------- 나의 식단표 (요일 구분 없는 자유 메뉴 목록) ----------
+function loadMealBank(){
+  var raw = sGet("routine_mealbank");
   if(raw){ try { return JSON.parse(raw); } catch(e){} }
-  return { breakfast:"", lunch:"", dinner:"" };
+  return { breakfast:[], lunch:[], dinner:[] };
 }
-function saveMeals(){ sSet("routine_meals", JSON.stringify(meals)); }
-var meals = loadMeals();
-function renderMeals(){
-  document.getElementById("meal-breakfast").value = meals.breakfast || "";
-  document.getElementById("meal-lunch").value = meals.lunch || "";
-  document.getElementById("meal-dinner").value = meals.dinner || "";
-}
-function wireMealInputs(){
-  [["meal-breakfast","breakfast"],["meal-lunch","lunch"],["meal-dinner","dinner"]].forEach(function(pair){
-    var el = document.getElementById(pair[0]);
-    if(!el) return;
-    el.addEventListener("input", function(){ meals[pair[1]] = el.value; saveMeals(); });
+function saveMealBank(){ sSet("routine_mealbank", JSON.stringify(mealBank)); }
+var mealBank = loadMealBank();
+function renderMealBank(){
+  ["breakfast","lunch","dinner"].forEach(function(type){
+    var box = document.getElementById("mealbank-list-"+type);
+    if(!box) return;
+    box.innerHTML = "";
+    var items = mealBank[type] || [];
+    if(items.length === 0){
+      box.innerHTML = '<span class="meal-chip-empty">아직 등록한 메뉴가 없어요</span>';
+      return;
+    }
+    items.forEach(function(it){
+      var chip = document.createElement("span");
+      chip.className = "meal-chip";
+      var txt = document.createElement("span");
+      txt.textContent = it.text;
+      txt.onclick = function(){
+        openModal({
+          title: "메뉴 수정",
+          hasInput: true,
+          inputValue: it.text,
+          inputPlaceholder: "메뉴 입력",
+          okLabel: "저장",
+          onOk: function(v){ if(v){ it.text = v; saveMealBank(); renderMealBank(); } }
+        });
+      };
+      var del = document.createElement("button");
+      del.className = "del";
+      del.textContent = "✕";
+      del.onclick = function(e){
+        e.stopPropagation();
+        mealBank[type] = mealBank[type].filter(function(x){ return x.id !== it.id; });
+        saveMealBank();
+        renderMealBank();
+      };
+      chip.appendChild(txt); chip.appendChild(del);
+      box.appendChild(chip);
+    });
   });
+}
+function addMealBankItem(type){
+  var input = document.getElementById("mealbank-input-"+type);
+  var text = input.value.trim();
+  if(!text){ input.focus(); return; }
+  if(!mealBank[type]) mealBank[type] = [];
+  mealBank[type].push({ id: Date.now()+Math.random(), text: text });
+  saveMealBank();
+  input.value = "";
+  renderMealBank();
 }
 
 // ---------- 쇼핑 리스트 (완료해도 목록에 남고, ✕로만 삭제) ----------
@@ -1807,7 +1859,7 @@ function showPage(p){
   if(p==="today") renderToday();
   if(p==="todo"){
     renderTodo();
-    renderMeals();
+    renderMealBank();
     renderShop();
     if(!gcalToken){
       var saved = getSavedGcalToken();
@@ -1824,12 +1876,11 @@ function initCalIfNeeded(){ if(!calInit){ initCal(); calInit = true; } }
 // 자정 넘어가면 자동 갱신
 var lastDay = todayStr();
 setInterval(function(){
-  if(todayStr()!==lastDay){ lastDay = todayStr(); renderToday(); renderTodo(); renderMeals(); }
+  if(todayStr()!==lastDay){ lastDay = todayStr(); renderToday(); renderTodo(); }
 }, 30000);
 
 renderToday();
 initSortables();
-wireMealInputs();
 
 // 앱 재시작 시 진행 중이던 타이머 복원
 (function(){
